@@ -2,7 +2,7 @@ name: pilot-replay
 level: L0
 provider: deepseek/deepseek-v4-flash-0731
 datasets: [sf100]
-queries: [q1, q5, q17]
+queries: [q01, q02, q03]
 objective: min_time
 tries: 1
 memory: "off"
