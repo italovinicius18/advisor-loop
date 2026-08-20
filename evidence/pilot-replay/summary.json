@@ -1,0 +1,6 @@
+{
+ "smoke": "ok",
+ "run1": "3 episodes infeasible",
+ "run2": "3 skipped idempotent",
+ "real_cost_usd": 0.002264
+}
