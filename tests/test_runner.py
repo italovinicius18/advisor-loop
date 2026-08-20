@@ -8,6 +8,7 @@ from tests.test_guardian import CLUSTER
 from tests.test_advisor import _submit_call, FakeClient
 from tests.test_replay import _ref
 from advisor_loop.backends.replay import ReplayBackend
+from advisor_loop.episode import episode_key
 
 class Pack:
     hash = "deadbeefdeadbeef"
@@ -31,5 +32,22 @@ def test_run_and_resume(tmp_path):
     camp = _campaign(tmp_path)
     s1 = run_campaign(camp, _deps(tmp_path, [_submit_call()]))
     assert s1["episodes_run"] == 1
-    s2 = run_campaign(camp, _deps(tmp_path, [_submit_call()]))       # re-advise, mesma chave -> pulado
+    # Resume real: LLM nao deterministico pode nao repetir a config exata.
+    # deps sem scripted responses -> se o runner chamar advise() de novo, estoura IndexError.
+    s2 = run_campaign(camp, _deps(tmp_path, []))
     assert s2["episodes_skipped"] == 1 and s2["episodes_run"] == 0
+    ek = episode_key("pilot", "sf100", "q1", 1)
+    ends = [e for e in Journal(tmp_path / "j.jsonl").events("episode_end") if e["task_key"] == ek]
+    assert len(ends) == 1
+
+
+def test_stubborn_advisor_does_not_crash_campaign(tmp_path):
+    """Advisor que nunca chama submit_recommendation deve virar dado, nao crash."""
+    camp = _campaign(tmp_path)
+    empty = LLMResponse(message={"content": "hmm"}, tool_calls=[])
+    summary = run_campaign(camp, _deps(tmp_path, [empty] * 12))      # esgota max_rounds sem submit
+    assert summary["episodes_run"] == 1
+    ek = episode_key("pilot", "sf100", "q1", 1)
+    ends = [e for e in Journal(tmp_path / "j.jsonl").events("episode_end") if e["task_key"] == ek]
+    assert len(ends) == 1
+    assert ends[0]["status"] == "invalid_recommendation"

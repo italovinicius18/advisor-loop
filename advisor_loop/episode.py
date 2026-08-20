@@ -20,6 +20,13 @@ def task_key(workload: str, dataset: str, query: str, config_hash: str, try_n: i
     raw = f"{workload}|{dataset}|{query}|{config_hash}|{try_n}"
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
+def episode_key(workload: str, dataset: str, query: str, try_n: int) -> str:
+    """Chave de retomada independente de config_hash: um LLM real nao repete a
+    mesma configuracao entre execucoes, entao a chave de resume nao pode
+    depender da recomendacao gerada."""
+    raw = f"{workload}|{dataset}|{query}|{try_n}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
 class QueryResult(BaseModel):
     status: Literal["success", "failed", "timeout", "killed"]
     duration_ms: float | None = None

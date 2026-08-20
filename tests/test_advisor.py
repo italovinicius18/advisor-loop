@@ -1,5 +1,5 @@
 import json, pytest
-from advisor_loop.advisor.advisor import Advisor
+from advisor_loop.advisor.advisor import Advisor, _SUBMIT
 from advisor_loop.advisor.provider import LLMResponse
 from advisor_loop.episode import Episode
 from advisor_loop.journal import Journal
@@ -54,3 +54,28 @@ def test_advise_handles_probe_error_and_still_submits(tmp_path):
     probe_events = j.events("probe")
     assert len(probe_events) == 1
     assert "budget esgotado" in probe_events[0]["error"]
+
+
+def _submit_call_out_of_bounds():
+    """driver_memory_gb=99 viola le=16 de ConfigVector -> pydantic.ValidationError."""
+    bad = {**CFG, "driver_memory_gb": 99}
+    args = json.dumps({**bad, "rationale": "config invalida propositalmente"})
+    return LLMResponse(message={}, cost_usd=0.001, tool_calls=[
+        {"id": "1", "function": {"name": "submit_recommendation", "arguments": args}}])
+
+
+def test_submit_schema_declares_bounds_for_driver_memory_gb():
+    props = _SUBMIT["function"]["parameters"]["properties"]
+    assert props["driver_memory_gb"].get("minimum") == 4
+    assert props["driver_memory_gb"].get("maximum") == 16
+
+
+def test_advise_retries_after_out_of_bound_submit(tmp_path):
+    """Um ValidationError do pydantic nao deve propagar (crash da CLI) - o advisor
+    deve devolver o erro ao modelo como tool result e deixar ele tentar de novo."""
+    j = Journal(tmp_path / "j.jsonl")
+    adv = Advisor(FakeClient([_submit_call_out_of_bounds(), _submit_call()]), j)
+    ep = Episode(workload="w", dataset="sf100", queries=["q1"], provider="m")
+    rec = adv.advise(ep, context="ctx", probe=None, memories=[])
+    assert rec.config.driver_memory_gb == 8
+    assert rec.config.executor_cores == 4

@@ -1,4 +1,5 @@
 import json
+import pydantic
 from advisor_loop.episode import ConfigVector, Episode, Recommendation
 from advisor_loop.journal import Journal
 from advisor_loop.probes.budget import ProbeBudgetExceeded
@@ -7,6 +8,17 @@ from advisor_loop.probes.duckdb_probe import ProbeTimeout
 class AdvisorError(Exception):
     pass
 
+def _field_schema(name: str, field) -> dict:
+    if name == "aqe_enabled":
+        return {"type": "boolean"}
+    schema: dict = {"type": "integer"}
+    for meta in field.metadata:
+        if hasattr(meta, "ge"):
+            schema["minimum"] = meta.ge
+        if hasattr(meta, "le"):
+            schema["maximum"] = meta.le
+    return schema
+
 _SUBMIT = {
     "type": "function",
     "function": {
@@ -14,8 +26,8 @@ _SUBMIT = {
         "description": "Envia a configuracao final recomendada.",
         "parameters": {"type": "object", "additionalProperties": False,
                        "required": [*ConfigVector.model_fields, "rationale"],
-                       "properties": {**{k: {"type": "boolean" if k == "aqe_enabled" else "integer"}
-                                         for k in ConfigVector.model_fields},
+                       "properties": {**{k: _field_schema(k, f)
+                                         for k, f in ConfigVector.model_fields.items()},
                                       "rationale": {"type": "string"}}}}}
 
 _PROBE_TOOLS = [
@@ -57,7 +69,15 @@ class Advisor:
                 args = json.loads(call["function"]["arguments"] or "{}")
                 if name == "submit_recommendation":
                     rationale = args.pop("rationale", "")
-                    return Recommendation(config=ConfigVector(**args), rationale=rationale)
+                    try:
+                        config = ConfigVector(**args)
+                    except pydantic.ValidationError as e:
+                        self.journal.append({"kind": "probe", "tool": name, "args": args,
+                                             "error": str(e)})
+                        messages.append({"role": "tool", "tool_call_id": call["id"],
+                                         "content": json.dumps({"error": f"config invalida: {e}"})})
+                        continue
+                    return Recommendation(config=config, rationale=rationale)
                 try:
                     result = getattr(probe, name)(**args)
                 except (ProbeBudgetExceeded, ProbeTimeout, ValueError, KeyError) as e:
