@@ -1,0 +1,10 @@
+engine: spark-3.5
+knobs:
+  executor_cores: "cores por executor; paralelismo intra-executor"
+  executor_memory_gb: "heap por executor; OOM se baixo p/ shuffle grande"
+  executor_instances: "numero de executors (workers)"
+  driver_memory_gb: "heap do driver; broadcasts e planos grandes pressionam"
+  shuffle_partitions: "particoes de shuffle; sobe com volume de dados"
+  advisory_partition_mb: "alvo do AQE p/ coalescing de particoes"
+  aqe_enabled: "adaptive query execution; re-otimiza em runtime"
+  broadcast_threshold_mb: "limite p/ broadcast join; -1 desliga (risco: piora joins pequenos)"
