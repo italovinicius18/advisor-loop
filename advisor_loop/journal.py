@@ -12,13 +12,16 @@ class Journal:
             for line in self.path.read_text().splitlines():
                 if not line.strip():
                     continue
-                ev = json.loads(line)
+                try:
+                    ev = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
                 self._events.append(ev)
                 if ev.get("task_key"):
                     self._keys.add(ev["task_key"])
 
     def append(self, event: dict) -> None:
-        event = {"ts": datetime.now(timezone.utc).isoformat(), **event}
+        event = {**event, "ts": datetime.now(timezone.utc).isoformat()}
         with open(self.path, "a") as f:
             f.write(json.dumps(event, ensure_ascii=False) + "\n")
             f.flush()

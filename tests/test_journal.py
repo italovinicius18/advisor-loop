@@ -8,3 +8,13 @@ def test_append_has_and_replay(tmp_path):
     assert j2.has("abc123")
     assert j2.events("query_result")[0]["status"] == "success"
     assert "ts" in j2.events()[0]
+
+def test_ts_authority_and_corrupt_tail(tmp_path):
+    p = tmp_path / "j.jsonl"
+    j = Journal(p)
+    j.append({"kind": "x", "ts": "1999-01-01T00:00:00"})   # caller ts must NOT win
+    assert j.events()[0]["ts"] != "1999-01-01T00:00:00"
+    with open(p, "a") as f:
+        f.write('{"kind": "y", "task_key": "trunc')          # linha truncada (crash simulado)
+    j2 = Journal(p)                                          # não pode levantar
+    assert len(j2.events()) == 1 and not j2.has("trunc")
