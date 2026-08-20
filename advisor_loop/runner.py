@@ -25,13 +25,13 @@ def run_campaign(campaign_path: str | Path, deps: Deps) -> dict:
     for dataset in camp["datasets"]:
         for query in camp["queries"]:
             for try_n in range(1, camp.get("tries", 1) + 1):
-                ek = episode_key(camp["name"], dataset, query, try_n)
-                if deps.journal.has(ek):        # config-independent: nunca re-executa no resume
-                    skipped += 1
-                    continue
                 ep = Episode(workload=camp["name"], dataset=dataset, queries=[query],
                              objective=camp.get("objective", "min_time"),
                              level=camp["level"], provider=camp["provider"])
+                ek = episode_key(camp["name"], dataset, query, try_n, ep.provider, ep.level)
+                if deps.journal.has(ek):        # config-independent: nunca re-executa no resume
+                    skipped += 1
+                    continue
                 probe = deps.probe_factory(ep) if camp["level"] in ("L1", "L2") else None
                 mems = deps.memory.retrieve(ep) if camp.get("memory") == "on" else []
                 context = deps.pack.render(ep)

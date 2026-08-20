@@ -14,7 +14,7 @@ class Archiver:
     def __init__(self, repo_root: str | Path):
         self.root = Path(repo_root)
 
-    def publish(self, campaign: str, journal_path: Path, extra: dict, push: bool = True) -> Path:
+    def publish(self, campaign: str, journal_path: Path, extra: dict, push: bool = False) -> Path:
         raw = Path(journal_path).read_text()
         summary = json.dumps(extra, ensure_ascii=False, indent=1)
         if scan_secrets(raw) or scan_secrets(summary):
@@ -25,8 +25,10 @@ class Archiver:
         (out / "summary.json").write_text(summary)
         rel = out.relative_to(self.root)
         subprocess.run(["git", "-C", str(self.root), "add", str(rel)], check=True)
+        # Escopar o commit ao pathspec da evidencia: nao varrer o que estiver
+        # staged em outro lugar de um index sujo.
         subprocess.run(["git", "-C", str(self.root), "commit", "-m",
-                        f"evidence: {campaign}"], check=True)
+                        f"evidence: {campaign}", "--", str(rel)], check=True)
         if push:
             subprocess.run(["git", "-C", str(self.root), "push"], check=True)
         return out

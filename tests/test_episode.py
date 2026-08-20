@@ -113,3 +113,19 @@ def test_models_construct_and_validate():
     assert ep_custom.objective == "feasibility"
     assert ep_custom.split == "loso-scale:sf500"
     assert ep_custom.level == "L2"
+
+
+def test_episode_key_includes_provider_and_level():
+    """Two campaigns identical except provider (or level) must NOT collide on resume."""
+    from advisor_loop.episode import episode_key
+    k_deepseek = episode_key("w", "sf100", "q1", 1, "deepseek", "L0")
+    k_sonnet = episode_key("w", "sf100", "q1", 1, "sonnet", "L0")
+    assert k_deepseek != k_sonnet
+
+    k_l1 = episode_key("w", "sf100", "q1", 1, "deepseek", "L1")
+    k_l2 = episode_key("w", "sf100", "q1", 1, "deepseek", "L2")
+    assert k_l1 != k_l2
+
+    # identical-everything -> same key (still allows correct resume-skip)
+    assert episode_key("w", "sf100", "q1", 1, "deepseek", "L0") == \
+           episode_key("w", "sf100", "q1", 1, "deepseek", "L0")

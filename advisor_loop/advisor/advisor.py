@@ -79,8 +79,11 @@ class Advisor:
                         continue
                     return Recommendation(config=config, rationale=rationale)
                 try:
+                    if probe is None:
+                        raise AttributeError(f"tool '{name}' indisponivel: probe nao ativo neste nivel")
                     result = getattr(probe, name)(**args)
-                except (ProbeBudgetExceeded, ProbeTimeout, ValueError, KeyError) as e:
+                except (ProbeBudgetExceeded, ProbeTimeout, ValueError, KeyError,
+                        AttributeError) as e:
                     self.journal.append({"kind": "probe", "tool": name, "args": args,
                                          "error": str(e)})
                     messages.append({"role": "tool", "tool_call_id": call["id"],

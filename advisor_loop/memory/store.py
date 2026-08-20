@@ -24,8 +24,18 @@ class MemoryStore:
         return mem
 
     def retrieve(self, ep: Episode, k: int = 5) -> list[str]:
-        def leaks(m):     # anti-vazamento: nada do proprio (dataset, query)
-            return m["dataset"] == ep.dataset and set(m["queries"]) & set(ep.queries)
+        def leaks(m):
+            # loso-scale:<sf>: fold isola por dataset inteiro -> vazamento se
+            # QUALQUER memoria do mesmo dataset entra (independente da query).
+            if ep.split.startswith("loso-scale:"):
+                return m["dataset"] == ep.dataset
+            # loso-query:<q>: fold isola por query inteira -> vazamento se
+            # QUALQUER memoria com overlap de query entra (independente do dataset).
+            if ep.split.startswith("loso-query:"):
+                return bool(set(m["queries"]) & set(ep.queries))
+            # default ("none" ou qualquer outro valor): anti-vazamento par a par -
+            # nada do proprio (dataset, query) exato.
+            return m["dataset"] == ep.dataset and bool(set(m["queries"]) & set(ep.queries))
         def score(m):
             return (m["workload"] == ep.workload, m["dataset"] == ep.dataset)
         pool = [m for m in self._all() if not leaks(m)]

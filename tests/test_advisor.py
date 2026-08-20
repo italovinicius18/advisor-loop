@@ -79,3 +79,23 @@ def test_advise_retries_after_out_of_bound_submit(tmp_path):
     rec = adv.advise(ep, context="ctx", probe=None, memories=[])
     assert rec.config.driver_memory_gb == 8
     assert rec.config.executor_cores == 4
+
+
+def _unknown_tool_call():
+    return LLMResponse(message={}, cost_usd=0.0002, tool_calls=[
+        {"id": "u1", "function": {"name": "frobnicate", "arguments": "{}"}}])
+
+
+def test_advise_handles_hallucinated_tool_name_and_still_submits(tmp_path):
+    """A hallucinated/unknown tool name must not crash the campaign (AttributeError) -
+    it should become a structured tool-error message fed back to the model, and the
+    loop continues to a valid submit_recommendation."""
+    j = Journal(tmp_path / "j.jsonl")
+    adv = Advisor(FakeClient([_unknown_tool_call(), _submit_call()]), j)
+    ep = Episode(workload="w", dataset="sf100", queries=["q1"], provider="m")
+    rec = adv.advise(ep, context="ctx", probe=None, memories=[])
+    assert rec.config.executor_cores == 4
+    probe_events = j.events("probe")
+    assert len(probe_events) == 1
+    assert probe_events[0]["tool"] == "frobnicate"
+    assert "error" in probe_events[0]
