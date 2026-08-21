@@ -11,7 +11,11 @@ class RemoteDuckDBProbe:
     in-cluster DuckDB HTTP service (service/duckdb_probe_server.py) instead
     of running duckdb locally over the SSH tunnel. Compute moves to where the
     data (MinIO) lives; only small SQL requests and small JSON results cross
-    the tunnel. BudgetedProbe wraps this identically to the local probe."""
+    the tunnel. BudgetedProbe wraps this identically to the local probe.
+
+    Note: a client-side or server-side timeout surfaces as ProbeQueryError,
+    not ProbeTimeout (unlike DuckDBProbe) - urllib's socket timeout and the
+    server's own timeout-as-{"error":...} response both flow through _post()."""
 
     def __init__(self, base_url: str, tables: dict[str, str], timeout_s: int = 35):
         self.base_url = base_url.rstrip("/")

@@ -128,6 +128,23 @@ def test_table_stats_query_error_becomes_probe_query_error(tmp_path):
         probe.table_stats("ghost")
 
 
+def test_budgeted_probe_does_not_clobber_inner_timeout_by_default(store):
+    """BudgetedProbe must not overwrite the inner probe's own timeout_s
+    unless one is explicitly passed - previously it unconditionally forced
+    timeout_s=10, which would silently shrink a probe implementation with a
+    longer default (e.g. RemoteDuckDBProbe's 35s) and kill valid queries
+    client-side before the real (server-side) timeout ever fired."""
+    probe = DuckDBProbe(store)
+    assert probe.timeout_s == 10  # DuckDBProbe's own default, untouched
+    b = BudgetedProbe(probe)
+    assert probe.timeout_s == 10
+
+
+def test_budgeted_probe_explicit_timeout_still_overrides(store):
+    b = BudgetedProbe(DuckDBProbe(store), timeout_s=5)
+    assert b._p.timeout_s == 5
+
+
 def test_probe_budget_and_remaining_are_budget_free(store):
     """probe_budget()/remaining() must expose the budget transparently to the
     advisor without themselves costing a probe."""

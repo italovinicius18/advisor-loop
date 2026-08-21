@@ -27,7 +27,11 @@ spec:
       labels:
         app: duckdb-probe
     spec:
-      serviceAccountName: ns-admin
+      # No serviceAccountName: this pod never calls the k8s API, so it runs
+      # under the namespace's default SA - no ns-admin needed. Explicitly
+      # disable token automount too: even the default SA's token is a
+      # target not worth mounting into a pod that only talks to MinIO.
+      automountServiceAccountToken: false
       # If the GHCR package is private, uncomment and provide a docker-registry
       # secret named ghcr-pull in this namespace; public packages need none.
       # imagePullSecrets: [{name: ghcr-pull}]
@@ -52,6 +56,12 @@ spec:
             port: 8000
           initialDelaySeconds: 3
           periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service

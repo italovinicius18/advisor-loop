@@ -19,7 +19,7 @@ import json
 import os
 import re
 import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import duckdb
 
@@ -31,6 +31,20 @@ DEFAULT_QUERY_TIMEOUT_S = int(os.environ.get("QUERY_TIMEOUT_S", "30"))
 # SELECT/WITH because table_stats() needs it (DESCRIBE SELECT ... LIMIT 0)
 # and it is just as read-only as a SELECT.
 _ALLOWED_PREFIX = re.compile(r"^(select|with|describe)\b", re.I)
+
+# SELECT/WITH-only is NOT enough: duckdb table functions callable inside a
+# SELECT can read pod-local files (read_text/read_csv/read_json/glob) or
+# make arbitrary outbound HTTP requests via httpfs (SSRF). A pod running as
+# ns-admin in-cluster makes the local filesystem alone worth blocking (e.g.
+# the mounted k8s SA token). The legitimate probe SQL only ever needs
+# delta_scan('s3://...')/read_parquet('s3://...') + count/describe, so
+# blocking these tokens breaks nothing real. Belt-and-suspenders alongside
+# `SET disabled_filesystems='LocalFileSystem'` in build_app(), which blocks
+# local reads at the engine level regardless of what slips past this regex.
+_FORBIDDEN_TOKENS = (
+    "read_text", "read_blob", "read_csv", "read_json", "read_ndjson",
+    "glob(", "http://", "https://",
+)
 
 
 def _validate_readonly(sql: str) -> str | None:
@@ -44,6 +58,11 @@ def _validate_readonly(sql: str) -> str | None:
         return "apenas um statement por probe"
     if not _ALLOWED_PREFIX.match(stripped):
         return "only SELECT/WITH allowed"
+
+    lowered = stripped.lower()
+    for token in _FORBIDDEN_TOKENS:
+        if token in lowered:
+            return "forbidden function/URL"
     return None
 
 
@@ -90,6 +109,14 @@ def make_handler(con, timeout_s: int = DEFAULT_QUERY_TIMEOUT_S):
     connection/parquet fixture without real MinIO, and so the real server can
     bind it to the MinIO-backed connection built by build_app()."""
 
+    # A duckdb.Connection is not safe for concurrent use from multiple
+    # threads. ThreadingHTTPServer means two overlapping POST /query calls
+    # would otherwise race on the same shared `con`. Serialize query
+    # execution with a lock scoped to this connection; GET /health never
+    # touches `con` or this lock, so health checks stay responsive even
+    # while a query is in flight or queued behind the lock.
+    query_lock = threading.Lock()
+
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):  # noqa: A002 - stdlib signature
             pass  # quiet by default; rely on k8s pod logs for real traffic if needed
@@ -120,7 +147,9 @@ def make_handler(con, timeout_s: int = DEFAULT_QUERY_TIMEOUT_S):
             except Exception:
                 self._send_json(200, {"error": "invalid request body"})
                 return
-            self._send_json(200, run_query(con, sql, timeout_s))
+            with query_lock:
+                result = run_query(con, sql, timeout_s)
+            self._send_json(200, result)
 
     return Handler
 
@@ -142,6 +171,13 @@ def build_app():
         f"KEY_ID '{key_id}', SECRET '{secret}', "
         f"ENDPOINT '{endpoint}', URL_STYLE 'path', USE_SSL false)"
     )
+
+    # Engine-level backstop for the _FORBIDDEN_TOKENS guard above: even if a
+    # query text slips past the regex, duckdb itself refuses any local-file
+    # access (read_text/read_csv/glob on '/...'), including the mounted k8s
+    # SA token path. S3/httpfs access (delta_scan/read_parquet on s3://...)
+    # is unaffected - only the *local* filesystem is disabled.
+    con.execute("SET disabled_filesystems='LocalFileSystem'")
     return con
 
 
@@ -150,7 +186,10 @@ def main():
     port = int(os.environ.get("PORT", "8000"))
     timeout_s = int(os.environ.get("QUERY_TIMEOUT_S", str(DEFAULT_QUERY_TIMEOUT_S)))
     handler = make_handler(con, timeout_s)
-    server = HTTPServer(("0.0.0.0", port), handler)
+    # ThreadingHTTPServer, not HTTPServer: a single-threaded server would let
+    # a slow/heavy query block /health (and every other in-flight request)
+    # for its full duration.
+    server = ThreadingHTTPServer(("0.0.0.0", port), handler)
     print(f"duckdb-probe-service listening on :{port} (query timeout {timeout_s}s)")
     server.serve_forever()
 

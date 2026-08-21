@@ -10,10 +10,18 @@ class ProbeTimeout(Exception):
 
 
 class BudgetedProbe:
-    def __init__(self, probe, max_probes: int = 8, timeout_s: int = 10):
+    def __init__(self, probe, max_probes: int = 8, timeout_s: int | None = None):
         self._p, self.max_probes, self.used = probe, max_probes, 0
         self.timeout_s = timeout_s
-        self._p.timeout_s = timeout_s
+        # Only override the inner probe's own timeout when a value is
+        # explicitly passed - otherwise let each probe implementation keep
+        # its own default (DuckDBProbe: 10s local; RemoteDuckDBProbe: 35s,
+        # to comfortably exceed the server's QUERY_TIMEOUT_S=30s). Previously
+        # this unconditionally clobbered RemoteDuckDBProbe's 35s down to 10s,
+        # killing valid 10-30s queries client-side before the server timeout
+        # even fired.
+        if timeout_s is not None:
+            self._p.timeout_s = timeout_s
 
     def _spend(self):
         if self.used >= self.max_probes:

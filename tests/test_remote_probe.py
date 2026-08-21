@@ -5,6 +5,7 @@ import duckdb
 import pytest
 
 from service.duckdb_probe_server import make_handler
+from advisor_loop.probes.budget import BudgetedProbe
 from advisor_loop.probes.duckdb_probe import ProbeQueryError
 from advisor_loop.probes.remote_probe import RemoteDuckDBProbe
 
@@ -69,6 +70,17 @@ def test_table_stats_missing_table_raises_keyerror(server_and_tables):
     probe = RemoteDuckDBProbe(base_url, tables)
     with pytest.raises(KeyError):
         probe.table_stats("ghost")
+
+
+def test_budgeted_probe_keeps_remote_probes_own_timeout_default(server_and_tables):
+    """BudgetedProbe(RemoteDuckDBProbe(...)) with no explicit timeout_s must
+    not clobber RemoteDuckDBProbe's own 35s default down to some other
+    value - it comfortably exceeds the server's QUERY_TIMEOUT_S=30s."""
+    base_url, tables = server_and_tables
+    probe = RemoteDuckDBProbe(base_url, tables)
+    assert probe.timeout_s == 35
+    BudgetedProbe(probe)
+    assert probe.timeout_s == 35
 
 
 def test_network_error_becomes_probe_query_error(tmp_path):
