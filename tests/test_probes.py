@@ -104,3 +104,15 @@ def test_available_tables_does_not_spend_budget(store):
     assert b.used == 1
     with pytest.raises(ProbeBudgetExceeded):
         b.list_tables()
+
+
+def test_probe_budget_and_remaining_are_budget_free(store):
+    """probe_budget()/remaining() must expose the budget transparently to the
+    advisor without themselves costing a probe."""
+    b = BudgetedProbe(DuckDBProbe(store), max_probes=3)
+    assert b.probe_budget() == 3
+    assert b.remaining() == 3
+    b.table_stats("store_sales")
+    assert b.remaining() == 2
+    assert b.probe_budget() == 3          # total budget never changes
+    assert b.used == 1                    # neither call spent a probe itself

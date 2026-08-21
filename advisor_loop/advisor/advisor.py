@@ -54,6 +54,15 @@ class Advisor:
         if probe is not None:
             user_content = (f"Tabelas reais disponiveis neste dataset: "
                              f"{', '.join(probe.available_tables())}.\n\n{user_content}")
+            probe_budget = getattr(probe, "probe_budget", None)
+            if probe_budget is not None:
+                user_content = (
+                    f"Orcamento de sondagem: no maximo {probe_budget()} probes "
+                    "(1 chamada de list_tables/table_stats/sample_query = 1 probe). "
+                    "Priorize as tabelas MAIORES e mais relevantes para o custo da query "
+                    "(fatos: store_sales/catalog_sales/web_sales/inventory); nao gaste "
+                    "probes em dimensoes pequenas. Se nao souber quais tabelas a query "
+                    f"toca, olhe a lista real acima.\n\n{user_content}")
         messages = [
             {"role": "system", "content":
              "Seja conciso: rationale de no maximo 120 palavras. Nao repita o contexto. "

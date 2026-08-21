@@ -24,6 +24,14 @@ class FakeProbe:
         raise ProbeBudgetExceeded("budget esgotado")
     def available_tables(self):
         return ["store_sales", "store_returns", "date_dim"]
+    def probe_budget(self):
+        return 8
+
+
+class FakeProbeNoBudgetIntrospection:
+    """Probe fake sem probe_budget() - simula um probe mais simples/antigo."""
+    def available_tables(self):
+        return ["store_sales"]
 
 def _submit_call():
     args = json.dumps({**CFG, "rationale": "workload medio"})
@@ -122,6 +130,31 @@ def test_advise_system_prompt_forbids_table_name_invention_without_probe(tmp_pat
     assert "NUNCA invente" in system_msg
     user_msg = client.last_kwargs["messages"][1]["content"]
     assert "Tabelas reais disponiveis" not in user_msg
+
+
+def test_advise_injects_probe_budget_line_when_available(tmp_path):
+    """The advisor must see its probe budget up front so it can prioritize
+    the big fact tables instead of blowing the budget on trivial dimensions."""
+    j = Journal(tmp_path / "j.jsonl")
+    client = FakeClient([_submit_call()])
+    adv = Advisor(client, j)
+    ep = Episode(workload="w", dataset="sf100", queries=["q1"], provider="m")
+    adv.advise(ep, context="ctx", probe=FakeProbe(), memories=[])
+    user_msg = client.last_kwargs["messages"][1]["content"]
+    assert "Orcamento de sondagem" in user_msg
+    assert "8" in user_msg
+
+
+def test_advise_skips_budget_line_for_probe_without_introspection(tmp_path):
+    """A probe lacking probe_budget() must not crash advise() - the budget
+    line is simply omitted (getattr defensively)."""
+    j = Journal(tmp_path / "j.jsonl")
+    client = FakeClient([_submit_call()])
+    adv = Advisor(client, j)
+    ep = Episode(workload="w", dataset="sf100", queries=["q1"], provider="m")
+    adv.advise(ep, context="ctx", probe=FakeProbeNoBudgetIntrospection(), memories=[])
+    user_msg = client.last_kwargs["messages"][1]["content"]
+    assert "Orcamento de sondagem" not in user_msg
 
 
 def test_advise_forwards_max_tokens_when_configured(tmp_path):

@@ -42,6 +42,15 @@ class BudgetedProbe:
         que ele alucine nomes de tabela de outros benchmarks."""
         return self._p.list_tables()
 
+    def probe_budget(self) -> int:
+        """Total de probes permitidos nesta sessao. Budget-free: expor o
+        orcamento nao consome orcamento."""
+        return self.max_probes
+
+    def remaining(self) -> int:
+        """Probes restantes. Budget-free, para o advisor planejar o uso."""
+        return self.max_probes - self.used
+
     def list_tables(self):
         self._spend()
         return self._p.list_tables()
