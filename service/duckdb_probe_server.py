@@ -18,12 +18,15 @@ Run directly: python service/duckdb_probe_server.py
 import json
 import os
 import re
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import duckdb
 
 DEFAULT_QUERY_TIMEOUT_S = int(os.environ.get("QUERY_TIMEOUT_S", "30"))
+# Bound on the post-interrupt join, see run_query().
+_INTERRUPT_JOIN_TIMEOUT_S = 30
 
 # Defense in depth: the BudgetedProbe layer already enforces SELECT/WITH-only
 # + single-statement client-side, but the server re-checks independently
@@ -36,56 +39,96 @@ _ALLOWED_PREFIX = re.compile(r"^(select|with|describe)\b", re.I)
 # SELECT can read pod-local files (read_text/read_csv/read_json/glob) or make
 # arbitrary outbound HTTP requests via httpfs (SSRF). A pod running in-cluster
 # makes the local filesystem alone worth blocking (e.g. a mounted k8s SA
-# token). Blacklisting URL-shaped text is NOT sufficient on its own - string
-# concatenation defeats it (`'http:' || '//169.254.169.254/...'` never
-# contains the literal substring "http://"), so the guard below is
-# STRUCTURAL, not a text blacklist:
-#   1. reject any string-building construct (`||`, or any of the functions
-#      below) - the legitimate probe SQL never needs to build a string, only
-#      to embed a bare literal;
-#   2. every single-quoted string literal that looks like a URL (contains
-#      `://`) must start with `s3://` - this blocks http(s)://, file://,
-#      etc. in ANY literal, in ANY function, not just the ones named below;
-#   3. the local-file-function blacklist stays as an extra layer (also
-#      covers non-URL local paths like '/etc/passwd', which rule 2 alone
-#      wouldn't catch).
-# Rules 1+2 together mean a URL can't be assembled to slip past rule 2 -
-# there is no way to build a "s3://..."-looking literal at parse time from
-# a concatenation and then have it actually resolve to something else,
-# because rule 1 forbids the concatenation in the first place.
+# token).
+#
+# Round 1 blacklisted "http://" as text - defeated by string concatenation
+# ('http:' || '//169.254.169.254/...' never contains that literal substring).
+# Round 2 blacklisted the *builder functions* (concat/printf/...) instead -
+# defeated by replace()/regexp_replace(), which weren't on the list. The
+# lesson: duckdb's scalar function surface is large and blacklisting it is
+# open-ended - there is always one more string-building function.
+#
+# Round 3 (this one) INVERTS to a WHITELIST on the one thing that actually
+# matters: the legitimate probe SQL (DuckDBProbe/RemoteDuckDBProbe) only
+# ever calls an S3 reader with a single bare 's3://...' literal - nothing
+# built, nothing else in the argument list. So instead of trying to
+# enumerate every way a hostile argument could be constructed, require the
+# call to be in EXACTLY that shape:
+#   1. every occurrence of an S3-capable reader function name (delta_scan,
+#      read_parquet, parquet_scan, parquet_metadata, parquet_schema) must be
+#      immediately followed by `(<optional ws>'s3://...'<optional ws>)` -
+#      a single bare quoted s3:// literal and nothing else. Anything else in
+#      the argument position (a function call, a list, a concatenation, a
+#      non-s3 literal) is rejected - it no longer matters WHAT scalar
+#      function might have built the argument, because no argument other
+#      than a bare literal is accepted at all.
+#   2. local-file reader functions (read_text/read_blob/read_csv/read_json/
+#      read_ndjson/glob) are still rejected outright, in any usage.
+#   3. the string-builder blacklist (||, concat, printf, ...) and the
+#      "any URL-shaped literal must be s3://" literal scan from round 2 are
+#      KEPT as defense-in-depth, but neither is load-bearing any more - rule
+#      1 alone already blocks every bypass found across all three rounds.
 # Belt-and-suspenders alongside `SET disabled_filesystems='LocalFileSystem'`
 # in build_app(), which blocks local reads at the engine level regardless of
 # what slips past all of the above.
+_S3_READER_FUNCS = ("delta_scan", "read_parquet", "parquet_scan", "parquet_metadata", "parquet_schema")
 _LOCAL_FILE_FUNCS = ("read_text", "read_blob", "read_csv", "read_json", "read_ndjson", "glob")
 _STRING_BUILDER_FUNCS = (
     "concat_ws", "concat", "printf", "format", "chr", "to_hex", "from_hex",
     "list_aggr", "string_agg", "repeat", "reverse", "translate", "encode", "decode",
 )
-_FORBIDDEN_FUNC_RE = re.compile(
-    r"\b(" + "|".join(_LOCAL_FILE_FUNCS + _STRING_BUILDER_FUNCS) + r")\s*\(", re.I
-)
+_LOCAL_FILE_FUNC_RE = re.compile(r"\b(" + "|".join(_LOCAL_FILE_FUNCS) + r")\s*\(", re.I)
+_STRING_BUILDER_FUNC_RE = re.compile(r"\b(" + "|".join(_STRING_BUILDER_FUNCS) + r")\s*\(", re.I)
+_S3_READER_CALL_RE = re.compile(r"\b(" + "|".join(_S3_READER_FUNCS) + r")\s*\(", re.I)
+# The one allowed shape of an S3 reader call's argument list: a single bare
+# 's3://...' literal, nothing else.
+_BARE_S3_LITERAL_ARG_RE = re.compile(r"\s*'s3://[^']*'\s*\)", re.I)
 # A single-quoted SQL string literal, honoring the '' (doubled-quote) escape
 # for an embedded literal quote.
 _STRING_LITERAL_RE = re.compile(r"'(?:[^']|'')*'")
 
 
-def _validate_readonly(sql: str) -> str | None:
-    """Return an error message if sql isn't a safe read-only single
-    statement, else None."""
+def _s3_readers_use_bare_literal_only(stripped: str) -> str | None:
+    """Every S3-capable reader call must be `name('s3://...')` exactly - a
+    single bare literal argument, nothing built, nothing else. Returns an
+    error message if any call doesn't match that shape, else None."""
+    for call in _S3_READER_CALL_RE.finditer(stripped):
+        if not _BARE_S3_LITERAL_ARG_RE.match(stripped, call.end()):
+            return "forbidden function/URL"
+    return None
+
+
+def _strip_sql(sql: str) -> str:
+    """Comment-strip + trim exactly once. The guard validates this string
+    AND run_query executes this same string (not the original) - "what was
+    validated is what runs", no divergence between the two."""
     stripped = re.sub(r"--[^\n]*", "", sql)
     stripped = re.sub(r"/\*.*?\*/", "", stripped, flags=re.S)
-    stripped = stripped.strip().rstrip(";").strip()
+    return stripped.strip().rstrip(";").strip()
 
+
+def _check_readonly(stripped: str) -> str | None:
+    """Guard checks against an already-stripped SQL string (see
+    _strip_sql). Returns an error message if unsafe, else None."""
     if ";" in stripped:
         return "apenas um statement por probe"
     if not _ALLOWED_PREFIX.match(stripped):
         return "only SELECT/WITH allowed"
 
-    if "||" in stripped:
-        return "forbidden function/URL"
-    if _FORBIDDEN_FUNC_RE.search(stripped):
+    if _LOCAL_FILE_FUNC_RE.search(stripped):
         return "forbidden function/URL"
 
+    err = _s3_readers_use_bare_literal_only(stripped)
+    if err:
+        return err
+
+    # Defense-in-depth, not load-bearing (see comment above): kept in case a
+    # future reader function is added to _S3_READER_FUNCS late, or a probe
+    # shape we haven't anticipated slips past rule 1 above.
+    if "||" in stripped:
+        return "forbidden function/URL"
+    if _STRING_BUILDER_FUNC_RE.search(stripped):
+        return "forbidden function/URL"
     for literal in _STRING_LITERAL_RE.findall(stripped):
         value = literal[1:-1].replace("''", "'")
         if "://" in value and not value.lower().startswith("s3://"):
@@ -94,11 +137,20 @@ def _validate_readonly(sql: str) -> str | None:
     return None
 
 
+def _validate_readonly(sql: str) -> str | None:
+    """Return an error message if sql isn't a safe read-only single
+    statement, else None. Public entry point (used directly by tests and
+    indirectly via run_query, which validates and executes the same
+    stripped string)."""
+    return _check_readonly(_strip_sql(sql))
+
+
 def run_query(con, sql: str, timeout_s: int = DEFAULT_QUERY_TIMEOUT_S) -> dict:
     """Execute sql on con, returning {"columns": ..., "rows": ...} or
     {"error": ...}. Never raises - callers (the HTTP handler) always get a
     JSON-serializable dict back."""
-    guard_err = _validate_readonly(sql)
+    stripped = _strip_sql(sql)
+    guard_err = _check_readonly(stripped)
     if guard_err:
         return {"error": guard_err}
 
@@ -107,7 +159,11 @@ def run_query(con, sql: str, timeout_s: int = DEFAULT_QUERY_TIMEOUT_S) -> dict:
 
     def execute():
         try:
-            rel = con.sql(sql)
+            # Execute the SAME string the guard validated, not the original
+            # `sql` - guarantees "what was validated is what runs" with no
+            # divergence between the two (the client never sends comments,
+            # so this is a no-op on legitimate traffic).
+            rel = con.sql(stripped)
             cols = [d[0] for d in rel.description]
             rows = [list(r) for r in rel.fetchall()]
             result["columns"] = cols
@@ -122,13 +178,25 @@ def run_query(con, sql: str, timeout_s: int = DEFAULT_QUERY_TIMEOUT_S) -> dict:
 
     if thread.is_alive():
         con.interrupt()
-        # Full join, no timeout cap: the caller holds query_lock for the
-        # duration of this call, and con is not safe for concurrent use.
-        # Returning while the worker thread might still be inside con.sql()
-        # would let the *next* query race on the same connection the moment
-        # the lock is released. con.interrupt() makes duckdb abort promptly,
-        # so this blocks only as long as it takes the engine to actually stop.
-        thread.join()
+        # Bounded join, not uncapped: the caller holds query_lock for the
+        # duration of this call, and con is not safe for concurrent use, so
+        # returning while the worker might still be inside con.sql() would
+        # let the *next* query race on the same connection. con.interrupt()
+        # normally makes duckdb abort promptly - but if the worker is stuck
+        # inside a call with no interrupt point (e.g. a wedged httpfs
+        # socket), an UNCAPPED join would hang forever holding the lock,
+        # starving every future /query. Bound it instead: if the worker is
+        # still alive after _INTERRUPT_JOIN_TIMEOUT_S, the connection is
+        # unrecoverable under the lock - hard-exit so k8s restarts the pod
+        # (self-heal). /health is unaffected either way (it never touches
+        # query_lock or con).
+        thread.join(timeout=_INTERRUPT_JOIN_TIMEOUT_S)
+        if thread.is_alive():
+            print(
+                f"FATAL: duckdb connection unresponsive {_INTERRUPT_JOIN_TIMEOUT_S}s "
+                "after interrupt() - exiting for pod restart", file=sys.stderr,
+            )
+            os._exit(1)
         return {"error": f"query exceeded {timeout_s}s timeout"}
 
     if exception:
@@ -206,11 +274,11 @@ def build_app():
         f"ENDPOINT '{endpoint}', URL_STYLE 'path', USE_SSL false)"
     )
 
-    # Engine-level backstop for the _FORBIDDEN_TOKENS guard above: even if a
-    # query text slips past the regex, duckdb itself refuses any local-file
-    # access (read_text/read_csv/glob on '/...'), including the mounted k8s
-    # SA token path. S3/httpfs access (delta_scan/read_parquet on s3://...)
-    # is unaffected - only the *local* filesystem is disabled.
+    # Engine-level backstop for the SQL guard above: even if a query text
+    # slips past the regex, duckdb itself refuses any local-file access
+    # (read_text/read_csv/glob on '/...'), including the mounted k8s SA
+    # token path. S3/httpfs access (delta_scan/read_parquet on s3://...) is
+    # unaffected - only the *local* filesystem is disabled.
     con.execute("SET disabled_filesystems='LocalFileSystem'")
     return con
 

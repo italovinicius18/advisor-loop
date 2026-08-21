@@ -214,6 +214,103 @@ def test_guard_allows_legitimate_s3_probe_sql():
     ) is None
 
 
+# --- security round 3: SSRF closed by WHITELISTING the argument shape ----
+#
+# Round 2's builder-function blacklist was defeated by replace()/
+# regexp_replace() - not on the list, and duckdb's scalar-function surface
+# is too large to blacklist exhaustively (there's always one more). Round 3
+# inverts to a whitelist: every S3-reader call (delta_scan/read_parquet/
+# parquet_scan/parquet_metadata/parquet_schema) must be EXACTLY
+# `name('s3://...')` - a single bare literal argument. Anything else in the
+# argument position - a function call regardless of which one, a list, a
+# concatenation, a non-s3 literal - is rejected. It no longer matters what
+# scalar function might have built the argument, because no argument other
+# than a bare literal is accepted at all.
+
+def test_query_rejects_replace_ssrf_bypass(running_server):
+    """The exact round-3 reproduced bypass: replace() reconstructs a clean
+    URL and isn't on any builder blacklist - the whitelist rejects it anyway
+    because the argument still isn't a bare literal."""
+    payload = _post(
+        running_server,
+        "SELECT * FROM read_parquet(replace('http:XX//169.254.169.254/x','XX','//'))",
+    )
+    assert "error" in payload
+    assert "forbidden" in payload["error"].lower()
+
+
+def test_query_rejects_regexp_replace_ssrf_bypass(running_server):
+    payload = _post(
+        running_server,
+        "SELECT * FROM delta_scan(regexp_replace('http:','p','p://x'))",
+    )
+    assert "error" in payload
+    assert "forbidden" in payload["error"].lower()
+
+
+def test_query_rejects_concat_on_s3_reader_even_with_s3_prefix(running_server):
+    """Not a bare literal call - concatenation is rejected regardless of
+    whether the pieces happen to spell something s3-looking."""
+    payload = _post(running_server, "SELECT * FROM read_parquet('s3://a' || 'b')")
+    assert "error" in payload
+    assert "forbidden" in payload["error"].lower()
+
+
+def test_query_rejects_list_argument_to_s3_reader(running_server):
+    """A list literal isn't a bare quoted literal - rejected even though
+    duckdb's readers accept a list-of-paths form in real usage."""
+    payload = _post(running_server, "SELECT * FROM read_parquet(['s3://a'])")
+    assert "error" in payload
+    assert "forbidden" in payload["error"].lower()
+
+
+def test_query_rejects_non_s3_bare_literal_to_reader(running_server):
+    payload = _post(running_server, "SELECT * FROM read_parquet('http://evil/x')")
+    assert "error" in payload
+    assert "forbidden" in payload["error"].lower()
+
+
+def test_query_executes_the_same_text_that_was_validated(running_server):
+    """run_query() must validate and execute the SAME stripped string - no
+    divergence between what the guard checked and what actually runs. A
+    trailing comment (stripped by both) must not change the result."""
+    payload = _post(running_server, "SELECT 42 AS x -- trailing comment, stripped either way")
+    assert "error" not in payload
+    assert payload["rows"] == [[42]]
+
+
+def test_run_query_self_heals_when_worker_never_stops(monkeypatch):
+    """If con.interrupt() doesn't actually stop the worker (e.g. it's stuck
+    inside a call with no interrupt point), an uncapped join would hang
+    forever holding query_lock and starve every future /query. The bounded
+    join must instead hard-exit the process (os._exit) so k8s restarts the
+    pod - verified here by faking os._exit to raise instead of actually
+    exiting the test process."""
+    import service.duckdb_probe_server as svc
+    monkeypatch.setattr(svc, "_INTERRUPT_JOIN_TIMEOUT_S", 1)
+
+    class StuckCon:
+        def interrupt(self):
+            pass  # simulates a worker with no interrupt point
+
+        def sql(self, sql):
+            import time
+            time.sleep(10)  # never actually stops within the bound
+            raise AssertionError("should never return - test would hang otherwise")
+
+    exit_calls = []
+
+    def fake_exit(code):
+        exit_calls.append(code)
+        raise SystemExit(code)
+
+    monkeypatch.setattr(svc.os, "_exit", fake_exit)
+
+    with pytest.raises(SystemExit):
+        svc.run_query(StuckCon(), "SELECT 1", timeout_s=1)
+    assert exit_calls == [1]
+
+
 def test_health_stays_responsive_during_slow_query():
     """ThreadingHTTPServer + a per-connection query_lock: a slow /query must
     not block /health (concurrency), and the query itself must still be the
