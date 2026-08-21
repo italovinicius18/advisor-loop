@@ -33,18 +33,40 @@ DEFAULT_QUERY_TIMEOUT_S = int(os.environ.get("QUERY_TIMEOUT_S", "30"))
 _ALLOWED_PREFIX = re.compile(r"^(select|with|describe)\b", re.I)
 
 # SELECT/WITH-only is NOT enough: duckdb table functions callable inside a
-# SELECT can read pod-local files (read_text/read_csv/read_json/glob) or
-# make arbitrary outbound HTTP requests via httpfs (SSRF). A pod running as
-# ns-admin in-cluster makes the local filesystem alone worth blocking (e.g.
-# the mounted k8s SA token). The legitimate probe SQL only ever needs
-# delta_scan('s3://...')/read_parquet('s3://...') + count/describe, so
-# blocking these tokens breaks nothing real. Belt-and-suspenders alongside
-# `SET disabled_filesystems='LocalFileSystem'` in build_app(), which blocks
-# local reads at the engine level regardless of what slips past this regex.
-_FORBIDDEN_TOKENS = (
-    "read_text", "read_blob", "read_csv", "read_json", "read_ndjson",
-    "glob(", "http://", "https://",
+# SELECT can read pod-local files (read_text/read_csv/read_json/glob) or make
+# arbitrary outbound HTTP requests via httpfs (SSRF). A pod running in-cluster
+# makes the local filesystem alone worth blocking (e.g. a mounted k8s SA
+# token). Blacklisting URL-shaped text is NOT sufficient on its own - string
+# concatenation defeats it (`'http:' || '//169.254.169.254/...'` never
+# contains the literal substring "http://"), so the guard below is
+# STRUCTURAL, not a text blacklist:
+#   1. reject any string-building construct (`||`, or any of the functions
+#      below) - the legitimate probe SQL never needs to build a string, only
+#      to embed a bare literal;
+#   2. every single-quoted string literal that looks like a URL (contains
+#      `://`) must start with `s3://` - this blocks http(s)://, file://,
+#      etc. in ANY literal, in ANY function, not just the ones named below;
+#   3. the local-file-function blacklist stays as an extra layer (also
+#      covers non-URL local paths like '/etc/passwd', which rule 2 alone
+#      wouldn't catch).
+# Rules 1+2 together mean a URL can't be assembled to slip past rule 2 -
+# there is no way to build a "s3://..."-looking literal at parse time from
+# a concatenation and then have it actually resolve to something else,
+# because rule 1 forbids the concatenation in the first place.
+# Belt-and-suspenders alongside `SET disabled_filesystems='LocalFileSystem'`
+# in build_app(), which blocks local reads at the engine level regardless of
+# what slips past all of the above.
+_LOCAL_FILE_FUNCS = ("read_text", "read_blob", "read_csv", "read_json", "read_ndjson", "glob")
+_STRING_BUILDER_FUNCS = (
+    "concat_ws", "concat", "printf", "format", "chr", "to_hex", "from_hex",
+    "list_aggr", "string_agg", "repeat", "reverse", "translate", "encode", "decode",
 )
+_FORBIDDEN_FUNC_RE = re.compile(
+    r"\b(" + "|".join(_LOCAL_FILE_FUNCS + _STRING_BUILDER_FUNCS) + r")\s*\(", re.I
+)
+# A single-quoted SQL string literal, honoring the '' (doubled-quote) escape
+# for an embedded literal quote.
+_STRING_LITERAL_RE = re.compile(r"'(?:[^']|'')*'")
 
 
 def _validate_readonly(sql: str) -> str | None:
@@ -59,10 +81,16 @@ def _validate_readonly(sql: str) -> str | None:
     if not _ALLOWED_PREFIX.match(stripped):
         return "only SELECT/WITH allowed"
 
-    lowered = stripped.lower()
-    for token in _FORBIDDEN_TOKENS:
-        if token in lowered:
+    if "||" in stripped:
+        return "forbidden function/URL"
+    if _FORBIDDEN_FUNC_RE.search(stripped):
+        return "forbidden function/URL"
+
+    for literal in _STRING_LITERAL_RE.findall(stripped):
+        value = literal[1:-1].replace("''", "'")
+        if "://" in value and not value.lower().startswith("s3://"):
             return "forbidden function/URL"
+
     return None
 
 
@@ -94,7 +122,13 @@ def run_query(con, sql: str, timeout_s: int = DEFAULT_QUERY_TIMEOUT_S) -> dict:
 
     if thread.is_alive():
         con.interrupt()
-        thread.join(timeout=1)
+        # Full join, no timeout cap: the caller holds query_lock for the
+        # duration of this call, and con is not safe for concurrent use.
+        # Returning while the worker thread might still be inside con.sql()
+        # would let the *next* query race on the same connection the moment
+        # the lock is released. con.interrupt() makes duckdb abort promptly,
+        # so this blocks only as long as it takes the engine to actually stop.
+        thread.join()
         return {"error": f"query exceeded {timeout_s}s timeout"}
 
     if exception:

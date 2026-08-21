@@ -151,6 +151,69 @@ def test_query_plain_select_still_allowed(running_server):
     assert payload["rows"] == [[42]]
 
 
+# --- security: SSRF closed STRUCTURALLY (allowlist the literal form) -----
+#
+# A text blacklist on "http://" is not enough: string concatenation builds
+# the substring at query time without it ever appearing literally in the
+# SQL text, e.g. 'http:' || '//169.254.169.254/...'. The guard instead (1)
+# forbids any string-building construct (||, concat/printf/format/...) and
+# (2) requires every URL-shaped string literal to start with s3://. Together
+# these mean there is no way to assemble a non-s3 URL that reaches httpfs.
+
+def test_query_rejects_concat_ssrf_bypass(running_server):
+    """The exact reproduced bypass: string concatenation defeats a naive
+    'http://' text blacklist but not the structural guard."""
+    payload = _post(
+        running_server,
+        "SELECT * FROM read_parquet('http:' || '//169.254.169.254/x')",
+    )
+    assert "error" in payload
+    assert "forbidden" in payload["error"].lower()
+
+
+def test_query_rejects_non_s3_url_literal_http(running_server):
+    payload = _post(running_server, "SELECT * FROM read_parquet('http://evil/x.parquet')")
+    assert "error" in payload
+    assert "forbidden" in payload["error"].lower()
+
+
+def test_query_rejects_non_s3_url_literal_file(running_server):
+    payload = _post(running_server, "SELECT * FROM delta_scan('file:///etc/x')")
+    assert "error" in payload
+    assert "forbidden" in payload["error"].lower()
+
+
+def test_query_rejects_glob_with_space_before_paren(running_server):
+    """Whitespace-before-paren must not bypass the forbidden-function check."""
+    payload = _post(running_server, "SELECT * FROM glob ('/etc/*')")
+    assert "error" in payload
+    assert "forbidden" in payload["error"].lower()
+
+
+def test_query_rejects_printf_string_builder(running_server):
+    payload = _post(running_server, "SELECT printf('%s','x')")
+    assert "error" in payload
+    assert "forbidden" in payload["error"].lower()
+
+
+def test_guard_allows_legitimate_s3_probe_sql():
+    """The real probe SQL shapes (bare s3:// literals, no concatenation, no
+    string-builder functions) must still pass the guard. Checked directly
+    against the guard function rather than executed end-to-end, since these
+    queries need real MinIO/S3 connectivity to actually run."""
+    from service.duckdb_probe_server import _validate_readonly
+
+    assert _validate_readonly(
+        "SELECT count(*) FROM delta_scan('s3://silver/sf1/delta/parquet/item')"
+    ) is None
+    assert _validate_readonly(
+        "DESCRIBE SELECT * FROM read_parquet('s3://silver/sf1/delta/parquet/item') LIMIT 0"
+    ) is None
+    assert _validate_readonly(
+        "SELECT ss_x FROM delta_scan('s3://silver/sf1/delta/parquet/store_sales') LIMIT 5"
+    ) is None
+
+
 def test_health_stays_responsive_during_slow_query():
     """ThreadingHTTPServer + a per-connection query_lock: a slow /query must
     not block /health (concurrency), and the query itself must still be the
