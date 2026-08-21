@@ -3,7 +3,7 @@ import pydantic
 from advisor_loop.episode import ConfigVector, Episode, Recommendation
 from advisor_loop.journal import Journal
 from advisor_loop.probes.budget import ProbeBudgetExceeded
-from advisor_loop.probes.duckdb_probe import ProbeTimeout
+from advisor_loop.probes.duckdb_probe import ProbeTimeout, ProbeQueryError
 
 class AdvisorError(Exception):
     pass
@@ -52,8 +52,11 @@ class Advisor:
         mem = "\n".join(f"- {m}" for m in memories) or "(sem memorias)"
         user_content = f"{context}\n\n## Memorias de episodios anteriores\n{mem}"
         if probe is not None:
-            user_content = (f"Tabelas reais disponiveis neste dataset: "
-                             f"{', '.join(probe.available_tables())}.\n\n{user_content}")
+            user_content = (
+                "IMPORTANTE: as colunas das tabelas Silver sao todas VARCHAR (nao "
+                "tipadas). Para qualquer agregacao/aritmetica use TRY_CAST(coluna AS "
+                "DOUBLE) - ex.: sum(TRY_CAST(ss_quantity AS DOUBLE)). count(*) e "
+                f"count(col) funcionam sem cast.\n\n{user_content}")
             probe_budget = getattr(probe, "probe_budget", None)
             if probe_budget is not None:
                 user_content = (
@@ -63,6 +66,8 @@ class Advisor:
                     "(fatos: store_sales/catalog_sales/web_sales/inventory); nao gaste "
                     "probes em dimensoes pequenas. Se nao souber quais tabelas a query "
                     f"toca, olhe a lista real acima.\n\n{user_content}")
+            user_content = (f"Tabelas reais disponiveis neste dataset: "
+                             f"{', '.join(probe.available_tables())}.\n\n{user_content}")
         messages = [
             {"role": "system", "content":
              "Seja conciso: rationale de no maximo 120 palavras. Nao repita o contexto. "
@@ -102,8 +107,8 @@ class Advisor:
                     if probe is None:
                         raise AttributeError(f"tool '{name}' indisponivel: probe nao ativo neste nivel")
                     result = getattr(probe, name)(**args)
-                except (ProbeBudgetExceeded, ProbeTimeout, ValueError, KeyError,
-                        AttributeError) as e:
+                except (ProbeBudgetExceeded, ProbeTimeout, ProbeQueryError, ValueError,
+                        KeyError, AttributeError) as e:
                     self.journal.append({"kind": "probe", "tool": name, "args": args,
                                          "error": str(e)})
                     messages.append({"role": "tool", "tool_call_id": call["id"],

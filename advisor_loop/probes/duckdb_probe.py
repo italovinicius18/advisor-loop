@@ -8,6 +8,13 @@ class ProbeTimeout(Exception):
     pass
 
 
+class ProbeQueryError(Exception):
+    """Erro genuino de query (binder/catalog/tipo etc.) - distinto de
+    ProbeTimeout. Vira um tool-error estruturado para o advisor, nao um
+    crash da campanha."""
+    pass
+
+
 class DuckDBProbe:
     """Sondagem leve sobre tabelas parquet/delta. Paths locais ou s3:// (via httpfs/delta ext)."""
     def __init__(self, tables: dict[str, str], timeout_s: int = 10,
@@ -65,11 +72,21 @@ class DuckDBProbe:
         return sorted(self.tables)
 
     def table_stats(self, table: str) -> dict:
-        rc = self._run(f"SELECT count(*) FROM {self._rel(table)}")[0][0]
-        cols = self._run(f"DESCRIBE SELECT * FROM {self._rel(table)} LIMIT 0")
+        try:
+            rc = self._run(f"SELECT count(*) FROM {self._rel(table)}")[0][0]
+            cols = self._run(f"DESCRIBE SELECT * FROM {self._rel(table)} LIMIT 0")
+        except ProbeTimeout:
+            raise
+        except Exception as e:
+            raise ProbeQueryError(str(e)) from e
         return {"row_count": rc, "columns": [{"name": c[0], "type": c[1]} for c in cols]}
 
     def sample_query(self, sql: str) -> list[tuple]:
         for name in sorted(self.tables, key=len, reverse=True):
             sql = re.sub(rf"\b{re.escape(name)}\b", self._rel(name), sql)
-        return self._run(sql)
+        try:
+            return self._run(sql)
+        except ProbeTimeout:
+            raise
+        except Exception as e:
+            raise ProbeQueryError(str(e)) from e

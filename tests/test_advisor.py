@@ -4,6 +4,7 @@ from advisor_loop.advisor.provider import LLMResponse
 from advisor_loop.episode import Episode
 from advisor_loop.journal import Journal
 from advisor_loop.probes.budget import ProbeBudgetExceeded
+from advisor_loop.probes.duckdb_probe import ProbeQueryError
 
 CFG = {"executor_cores": 4, "executor_memory_gb": 14, "executor_instances": 4,
        "driver_memory_gb": 8, "shuffle_partitions": 400, "advisory_partition_mb": 64,
@@ -32,6 +33,15 @@ class FakeProbeNoBudgetIntrospection:
     """Probe fake sem probe_budget() - simula um probe mais simples/antigo."""
     def available_tables(self):
         return ["store_sales"]
+
+
+class FakeProbeQueryError:
+    """Probe fake que sempre levanta ProbeQueryError em table_stats - simula
+    o caso real: sum(VARCHAR) contra Silver nao tipada."""
+    def available_tables(self):
+        return ["store_sales"]
+    def table_stats(self, table):
+        raise ProbeQueryError("No function matches 'sum(VARCHAR)'")
 
 def _submit_call():
     args = json.dumps({**CFG, "rationale": "workload medio"})
@@ -155,6 +165,32 @@ def test_advise_skips_budget_line_for_probe_without_introspection(tmp_path):
     adv.advise(ep, context="ctx", probe=FakeProbeNoBudgetIntrospection(), memories=[])
     user_msg = client.last_kwargs["messages"][1]["content"]
     assert "Orcamento de sondagem" not in user_msg
+
+
+def test_advise_injects_try_cast_typing_note_when_probe_given(tmp_path):
+    """Silver columns are all VARCHAR (untyped) - the advisor must be told to
+    TRY_CAST before aggregating, or it will keep hitting sum(VARCHAR) errors."""
+    j = Journal(tmp_path / "j.jsonl")
+    client = FakeClient([_submit_call()])
+    adv = Advisor(client, j)
+    ep = Episode(workload="w", dataset="sf100", queries=["q1"], provider="m")
+    adv.advise(ep, context="ctx", probe=FakeProbe(), memories=[])
+    user_msg = client.last_kwargs["messages"][1]["content"]
+    assert "TRY_CAST" in user_msg
+
+
+def test_advise_handles_probe_query_error_and_still_submits(tmp_path):
+    """A ProbeQueryError (e.g. sum(VARCHAR) BinderException against untyped
+    Silver) must become a tool-error fed back to the model, not a campaign
+    crash - the loop must continue to a valid submit_recommendation."""
+    j = Journal(tmp_path / "j.jsonl")
+    adv = Advisor(FakeClient([_probe_call(), _submit_call()]), j)
+    ep = Episode(workload="w", dataset="sf100", queries=["q1"], provider="m")
+    rec = adv.advise(ep, context="ctx", probe=FakeProbeQueryError(), memories=[])
+    assert rec.config.executor_cores == 4
+    probe_events = j.events("probe")
+    assert len(probe_events) == 1
+    assert "sum(VARCHAR)" in probe_events[0]["error"]
 
 
 def test_advise_forwards_max_tokens_when_configured(tmp_path):

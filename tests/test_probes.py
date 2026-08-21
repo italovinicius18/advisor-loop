@@ -1,6 +1,6 @@
 import duckdb
 import pytest
-from advisor_loop.probes.duckdb_probe import DuckDBProbe, ProbeTimeout
+from advisor_loop.probes.duckdb_probe import DuckDBProbe, ProbeTimeout, ProbeQueryError
 from advisor_loop.probes.budget import BudgetedProbe, ProbeBudgetExceeded
 
 
@@ -104,6 +104,28 @@ def test_available_tables_does_not_spend_budget(store):
     assert b.used == 1
     with pytest.raises(ProbeBudgetExceeded):
         b.list_tables()
+
+
+def test_sample_query_type_error_becomes_probe_query_error_not_crash(tmp_path):
+    """Untyped-Silver reality: all columns are VARCHAR. sum(str_col) raises a
+    DuckDB BinderException - it must surface as ProbeQueryError, not a raw
+    duckdb exception (which would crash the campaign uncaught)."""
+    p = tmp_path / "t.parquet"
+    duckdb.sql("SELECT '1' AS str_col FROM range(10)").write_parquet(str(p))
+    probe = DuckDBProbe({"t": str(p)})
+    with pytest.raises(ProbeQueryError):
+        probe.sample_query("SELECT sum(str_col) FROM t LIMIT 1")
+    # a valid aggregation that needs no cast still works
+    rows = probe.sample_query("SELECT count(*) FROM t LIMIT 1")
+    assert rows[0][0] == 10
+
+
+def test_table_stats_query_error_becomes_probe_query_error(tmp_path):
+    """table_stats against a registered-but-missing file -> genuine DuckDB
+    IOException at query time -> must surface as ProbeQueryError, not crash."""
+    probe = DuckDBProbe({"ghost": str(tmp_path / "does-not-exist.parquet")})
+    with pytest.raises(ProbeQueryError):
+        probe.table_stats("ghost")
 
 
 def test_probe_budget_and_remaining_are_budget_free(store):
