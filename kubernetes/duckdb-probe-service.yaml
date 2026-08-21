@@ -42,7 +42,7 @@ spec:
         ports:
         - containerPort: 8000
         env:
-        - {name: MINIO_ENDPOINT, value: "minio.italo-unb.svc.cluster.local:9000"}
+        - {name: MINIO_ENDPOINT, value: "minio.italo-unb:9000"}
         - {name: MINIO_KEY,      value: "minioadmin"}
         - {name: MINIO_SECRET,   value: "minioadmin"}
         - {name: PORT,           value: "8000"}
