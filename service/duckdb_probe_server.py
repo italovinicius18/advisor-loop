@@ -62,17 +62,28 @@ _ALLOWED_PREFIX = re.compile(r"^(select|with|describe)\b", re.I)
 #      non-s3 literal) is rejected - it no longer matters WHAT scalar
 #      function might have built the argument, because no argument other
 #      than a bare literal is accepted at all.
-#   2. local-file reader functions (read_text/read_blob/read_csv/read_json/
-#      read_ndjson/glob) are still rejected outright, in any usage.
+#   2. local-file reader functions - read_text/read_blob/read_csv/read_json/
+#      read_ndjson/glob AND their real duckdb variants (read_csv_auto,
+#      read_json_auto, read_ndjson_auto, read_json_objects, sniff_csv) - are
+#      still rejected outright, in any usage. This regex layer is genuine
+#      defense-in-depth, not the only thing stopping them: `SET
+#      disabled_filesystems='LocalFileSystem'` in build_app() blocks local
+#      reads at the engine level regardless of what slips past the regex,
+#      and any of these called with an http(s):// argument instead of a
+#      local path would separately be caught by the literal-scheme scan
+#      (rule 3 below) even if a variant were missing from this list.
 #   3. the string-builder blacklist (||, concat, printf, ...) and the
 #      "any URL-shaped literal must be s3://" literal scan from round 2 are
 #      KEPT as defense-in-depth, but neither is load-bearing any more - rule
 #      1 alone already blocks every bypass found across all three rounds.
-# Belt-and-suspenders alongside `SET disabled_filesystems='LocalFileSystem'`
-# in build_app(), which blocks local reads at the engine level regardless of
-# what slips past all of the above.
 _S3_READER_FUNCS = ("delta_scan", "read_parquet", "parquet_scan", "parquet_metadata", "parquet_schema")
-_LOCAL_FILE_FUNCS = ("read_text", "read_blob", "read_csv", "read_json", "read_ndjson", "glob")
+_LOCAL_FILE_FUNCS = (
+    "read_text", "read_blob",
+    "read_csv_auto", "read_csv",
+    "read_json_objects", "read_json_auto", "read_json",
+    "read_ndjson_auto", "read_ndjson",
+    "sniff_csv", "glob",
+)
 _STRING_BUILDER_FUNCS = (
     "concat_ws", "concat", "printf", "format", "chr", "to_hex", "from_hex",
     "list_aggr", "string_agg", "repeat", "reverse", "translate", "encode", "decode",

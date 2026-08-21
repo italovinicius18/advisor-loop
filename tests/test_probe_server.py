@@ -270,6 +270,27 @@ def test_query_rejects_non_s3_bare_literal_to_reader(running_server):
     assert "forbidden" in payload["error"].lower()
 
 
+def test_query_rejects_read_csv_auto_variant(running_server):
+    """The local-file blacklist must cover duckdb's *_auto/*_objects/sniff_*
+    variants, not just the 6 bare names - read_csv_auto is a real duckdb
+    function, not just read_csv with different defaults."""
+    payload = _post(running_server, "SELECT * FROM read_csv_auto('/etc/passwd')")
+    assert "error" in payload
+    assert "forbidden" in payload["error"].lower()
+
+
+def test_query_rejects_sniff_csv_variant(running_server):
+    payload = _post(running_server, "SELECT * FROM sniff_csv('/etc/passwd')")
+    assert "error" in payload
+    assert "forbidden" in payload["error"].lower()
+
+
+def test_query_rejects_read_json_objects_ssrf(running_server):
+    payload = _post(running_server, "SELECT * FROM read_json_objects('http://x')")
+    assert "error" in payload
+    assert "forbidden" in payload["error"].lower()
+
+
 def test_query_executes_the_same_text_that_was_validated(running_server):
     """run_query() must validate and execute the SAME stripped string - no
     divergence between what the guard checked and what actually runs. A
