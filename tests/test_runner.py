@@ -51,6 +51,27 @@ def test_stubborn_advisor_does_not_crash_campaign(tmp_path):
     ends = [e for e in Journal(tmp_path / "j.jsonl").events("episode_end") if e["task_key"] == ek]
     assert len(ends) == 1
     assert ends[0]["status"] == "invalid_recommendation"
+    # richer journaling: even a non-completed episode must be traceable
+    assert ends[0]["query"] == "q1"
+    assert ends[0]["dataset"] == "sf100"
+    assert ends[0]["provider"] == "m"
+    assert ends[0]["level"] == "L0"
+    assert ends[0]["rationale"] == ""
+
+
+def test_episode_end_journals_query_dataset_provider_and_rationale(tmp_path):
+    """Success path episode_end must carry query/dataset/provider/level/rationale
+    so non-completed episodes stay traceable and the LLM's reasoning is preserved."""
+    camp = _campaign(tmp_path)
+    run_campaign(camp, _deps(tmp_path, [_submit_call()]))
+    ends = Journal(tmp_path / "j.jsonl").events("episode_end")
+    assert len(ends) == 1
+    e = ends[0]
+    assert e["query"] == "q1"
+    assert e["dataset"] == "sf100"
+    assert e["provider"] == "m"
+    assert e["level"] == "L0"
+    assert e["rationale"] == "workload medio"
 
 
 def _campaign_with(tmp_path, name, provider, level, fname="c.yaml"):

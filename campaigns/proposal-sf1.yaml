@@ -1,0 +1,9 @@
+name: proposal-sf1
+level: L1
+provider: deepseek/deepseek-v4-flash-0731
+backend: proposal
+datasets: [sf1]
+queries: [q03, q07, q42]
+objective: min_time
+tries: 1
+memory: "off"

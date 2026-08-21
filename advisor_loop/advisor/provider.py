@@ -44,6 +44,7 @@ class OpenRouterClient:
         messages: list[dict],
         tools: list[dict] | None = None,
         temperature: float = 0.2,
+        max_tokens: int | None = None,
     ) -> LLMResponse:
         """Send a chat completion request to OpenRouter.
 
@@ -52,6 +53,7 @@ class OpenRouterClient:
             messages: Chat messages
             tools: Optional tool definitions for function calling
             temperature: Sampling temperature (default 0.2)
+            max_tokens: Optional output token cap (default None = unbounded)
 
         Returns:
             LLMResponse with message, tool_calls, cost_usd, and usage
@@ -64,6 +66,8 @@ class OpenRouterClient:
         }
         if tools:
             payload["tools"] = tools
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
 
         resp = self.http.post("/chat/completions", json=payload)
         resp.raise_for_status()

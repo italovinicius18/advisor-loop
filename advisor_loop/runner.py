@@ -39,7 +39,10 @@ def run_campaign(campaign_path: str | Path, deps: Deps) -> dict:
                     rec = adv.advise(ep, context, probe, mems)
                 except AdvisorError as e:
                     deps.journal.append({"kind": "episode_end", "task_key": ek,
-                                         "status": "invalid_recommendation", "reason": str(e)})
+                                         "status": "invalid_recommendation", "reason": str(e),
+                                         "query": query, "dataset": dataset,
+                                         "provider": ep.provider, "level": ep.level,
+                                         "rationale": ""})
                     ran += 1
                     continue
                 ok, reason = deps.guardian.validate(rec.config)
@@ -51,7 +54,10 @@ def run_campaign(campaign_path: str | Path, deps: Deps) -> dict:
                         ok, reason = False, str(e)
                 if not ok:
                     deps.journal.append({"kind": "episode_end", "task_key": ek,
-                                         "status": "invalid_recommendation", "reason": reason})
+                                         "status": "invalid_recommendation", "reason": reason,
+                                         "query": query, "dataset": dataset,
+                                         "provider": ep.provider, "level": ep.level,
+                                         "rationale": rec.rationale})
                     ran += 1
                     continue
                 out = deps.backend.execute(ep, rec)
@@ -61,7 +67,10 @@ def run_campaign(campaign_path: str | Path, deps: Deps) -> dict:
                 deps.journal.append({"kind": "episode_end", "task_key": ek,
                                      "status": out.status, "pack_hash": deps.pack.hash,
                                      "config": rec.config.model_dump(),
-                                     "config_hash": rec.config.config_hash()})
+                                     "config_hash": rec.config.config_hash(),
+                                     "query": query, "dataset": dataset,
+                                     "provider": ep.provider, "level": ep.level,
+                                     "rationale": rec.rationale})
                 if camp.get("memory") == "on":
                     deps.memory.distill(ep, rec, out)
                 ran += 1

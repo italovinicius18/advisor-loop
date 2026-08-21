@@ -72,3 +72,23 @@ def test_multi_table_substitution(multi_table):
     rows = probe.sample_query("SELECT count(*) FROM store_returns LIMIT 1")
     assert len(rows) == 1
     assert rows[0][0] == 50
+
+
+def test_s3_config_sets_up_secret_without_breaking_local_probes(store):
+    """s3_config, when provided, must install httpfs/delta and register a MinIO
+    secret without crashing - local (non-s3) tables must still work normally."""
+    probe = DuckDBProbe(store, s3_config={
+        "endpoint": "localhost:9000", "key_id": "minioadmin", "secret": "minioadmin",
+        "use_ssl": False, "url_style": "path",
+    })
+    assert probe.list_tables() == ["store_sales"]
+    st = probe.table_stats("store_sales")
+    assert st["row_count"] == 1000
+
+
+def test_s3_config_none_keeps_local_behavior_identical(store):
+    """Default (s3_config=None) must behave exactly as before."""
+    probe = DuckDBProbe(store)
+    assert probe.list_tables() == ["store_sales"]
+    rows = probe.sample_query("SELECT id FROM store_sales LIMIT 3")
+    assert len(rows) == 3

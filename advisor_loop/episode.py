@@ -37,7 +37,7 @@ class QueryResult(BaseModel):
 
 class Outcome(BaseModel):
     status: Literal["completed", "driver_crash", "aborted_by_supervisor",
-                    "invalid_recommendation", "infeasible", "error"]
+                    "invalid_recommendation", "infeasible", "error", "proposed"]
     per_query: dict[str, QueryResult] = {}
     wall_clock_s: float = 0.0
     cost_usd: float = 0.0

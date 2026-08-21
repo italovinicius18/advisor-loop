@@ -12,7 +12,10 @@ CFG = {"executor_cores": 4, "executor_memory_gb": 14, "executor_instances": 4,
 class FakeClient:
     def __init__(self, scripted):
         self.scripted = list(scripted)
-    def chat(self, model, messages, tools=None, temperature=0.2):
+        self.last_kwargs = None
+    def chat(self, model, messages, tools=None, temperature=0.2, max_tokens=None):
+        self.last_kwargs = {"model": model, "messages": messages, "tools": tools,
+                             "temperature": temperature, "max_tokens": max_tokens}
         return self.scripted.pop(0)
 
 class FakeProbe:
@@ -84,6 +87,26 @@ def test_advise_retries_after_out_of_bound_submit(tmp_path):
 def _unknown_tool_call():
     return LLMResponse(message={}, cost_usd=0.0002, tool_calls=[
         {"id": "u1", "function": {"name": "frobnicate", "arguments": "{}"}}])
+
+
+def test_advise_forwards_max_tokens_when_configured(tmp_path):
+    """Advisor(max_tokens=...) must be forwarded on every client.chat() call."""
+    j = Journal(tmp_path / "j.jsonl")
+    client = FakeClient([_submit_call()])
+    adv = Advisor(client, j, max_tokens=512)
+    ep = Episode(workload="w", dataset="sf100", queries=["q1"], provider="m")
+    adv.advise(ep, context="ctx", probe=None, memories=[])
+    assert client.last_kwargs["max_tokens"] == 512
+
+
+def test_advise_max_tokens_defaults_to_none(tmp_path):
+    """Default Advisor (no max_tokens) must not cap output - preserves old behavior."""
+    j = Journal(tmp_path / "j.jsonl")
+    client = FakeClient([_submit_call()])
+    adv = Advisor(client, j)
+    ep = Episode(workload="w", dataset="sf100", queries=["q1"], provider="m")
+    adv.advise(ep, context="ctx", probe=None, memories=[])
+    assert client.last_kwargs["max_tokens"] is None
 
 
 def test_advise_handles_hallucinated_tool_name_and_still_submits(tmp_path):

@@ -1,0 +1,34 @@
+# Datasets reais no MinIO do cluster (Silver Delta Lake), para o modo de
+# proposta livre. Requer tunel para localhost:9000 (ver controller).
+s3:
+  endpoint: "localhost:9000"
+  key_id: "minioadmin"
+  secret: "minioadmin"
+  use_ssl: false
+  url_style: "path"
+
+sf1:
+  call_center: "s3://silver/sf1/delta/parquet/call_center"
+  catalog_page: "s3://silver/sf1/delta/parquet/catalog_page"
+  catalog_returns: "s3://silver/sf1/delta/parquet/catalog_returns"
+  catalog_sales: "s3://silver/sf1/delta/parquet/catalog_sales"
+  customer: "s3://silver/sf1/delta/parquet/customer"
+  customer_address: "s3://silver/sf1/delta/parquet/customer_address"
+  customer_demographics: "s3://silver/sf1/delta/parquet/customer_demographics"
+  date_dim: "s3://silver/sf1/delta/parquet/date_dim"
+  household_demographics: "s3://silver/sf1/delta/parquet/household_demographics"
+  income_band: "s3://silver/sf1/delta/parquet/income_band"
+  inventory: "s3://silver/sf1/delta/parquet/inventory"
+  item: "s3://silver/sf1/delta/parquet/item"
+  promotion: "s3://silver/sf1/delta/parquet/promotion"
+  reason: "s3://silver/sf1/delta/parquet/reason"
+  ship_mode: "s3://silver/sf1/delta/parquet/ship_mode"
+  store: "s3://silver/sf1/delta/parquet/store"
+  store_returns: "s3://silver/sf1/delta/parquet/store_returns"
+  store_sales: "s3://silver/sf1/delta/parquet/store_sales"
+  time_dim: "s3://silver/sf1/delta/parquet/time_dim"
+  warehouse: "s3://silver/sf1/delta/parquet/warehouse"
+  web_page: "s3://silver/sf1/delta/parquet/web_page"
+  web_returns: "s3://silver/sf1/delta/parquet/web_returns"
+  web_sales: "s3://silver/sf1/delta/parquet/web_sales"
+  web_site: "s3://silver/sf1/delta/parquet/web_site"

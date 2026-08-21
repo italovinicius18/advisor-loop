@@ -42,20 +42,23 @@ _PROBE_TOOLS = [
 ]
 
 class Advisor:
-    def __init__(self, client, journal: Journal, max_rounds: int = 12):
+    def __init__(self, client, journal: Journal, max_rounds: int = 12,
+                 max_tokens: int | None = None):
         self.client, self.journal, self.max_rounds = client, journal, max_rounds
+        self.max_tokens = max_tokens
 
     def advise(self, ep: Episode, context: str, probe, memories: list[str]) -> Recommendation:
         tools = [_SUBMIT] + (_PROBE_TOOLS if probe else [])
         mem = "\n".join(f"- {m}" for m in memories) or "(sem memorias)"
         messages = [
             {"role": "system", "content":
+             "Seja conciso: rationale de no maximo 120 palavras. Nao repita o contexto. "
              "Voce recomenda configuracao de execucao para cargas SQL analiticas. "
              "Use as tools de sondagem se disponiveis e finalize SEMPRE via submit_recommendation."},
             {"role": "user", "content": f"{context}\n\n## Memorias de episodios anteriores\n{mem}"},
         ]
         for _ in range(self.max_rounds):
-            r = self.client.chat(ep.provider, messages, tools=tools)
+            r = self.client.chat(ep.provider, messages, tools=tools, max_tokens=self.max_tokens)
             self.journal.append({"kind": "llm_call", "model": ep.provider,
                                  "cost_usd": r.cost_usd, "usage": r.usage})
             if not r.tool_calls:

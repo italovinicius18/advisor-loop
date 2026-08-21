@@ -1,4 +1,5 @@
 import duckdb
+import os
 import re
 import threading
 
@@ -9,10 +10,25 @@ class ProbeTimeout(Exception):
 
 class DuckDBProbe:
     """Sondagem leve sobre tabelas parquet/delta. Paths locais ou s3:// (via httpfs/delta ext)."""
-    def __init__(self, tables: dict[str, str], timeout_s: int = 10):
+    def __init__(self, tables: dict[str, str], timeout_s: int = 10,
+                 s3_config: dict | None = None):
         self.tables = tables
         self.con = duckdb.connect()
         self.timeout_s = timeout_s
+        if s3_config:
+            # AWS_EC2_METADATA_DISABLED evita que o delta kernel tente o
+            # endpoint de metadata EC2 (trava fora de instancias AWS).
+            os.environ["AWS_EC2_METADATA_DISABLED"] = "true"
+            os.environ["AWS_ALLOW_HTTP"] = "true"
+            self.con.execute("INSTALL httpfs; LOAD httpfs; INSTALL delta; LOAD delta")
+            use_ssl = "true" if s3_config.get("use_ssl", False) else "false"
+            url_style = s3_config.get("url_style", "path")
+            self.con.execute(
+                "CREATE OR REPLACE SECRET minio (TYPE S3, "
+                f"KEY_ID '{s3_config['key_id']}', SECRET '{s3_config['secret']}', "
+                f"ENDPOINT '{s3_config['endpoint']}', URL_STYLE '{url_style}', "
+                f"USE_SSL {use_ssl})"
+            )
 
     def _rel(self, table: str) -> str:
         path = self.tables[table]
