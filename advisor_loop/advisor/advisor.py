@@ -50,12 +50,20 @@ class Advisor:
     def advise(self, ep: Episode, context: str, probe, memories: list[str]) -> Recommendation:
         tools = [_SUBMIT] + (_PROBE_TOOLS if probe else [])
         mem = "\n".join(f"- {m}" for m in memories) or "(sem memorias)"
+        user_content = f"{context}\n\n## Memorias de episodios anteriores\n{mem}"
+        if probe is not None:
+            user_content = (f"Tabelas reais disponiveis neste dataset: "
+                             f"{', '.join(probe.available_tables())}.\n\n{user_content}")
         messages = [
             {"role": "system", "content":
              "Seja conciso: rationale de no maximo 120 palavras. Nao repita o contexto. "
+             "Ao sondar dados: chame list_tables PRIMEIRO e sonde SOMENTE tabelas exatamente "
+             "como retornadas por ela. NUNCA invente ou adivinhe nomes de tabela (nao use "
+             "nomes de outros benchmarks como lineorder/part/supplier). Um table_stats com "
+             "erro significa que a tabela nao existe - volte para a lista real. "
              "Voce recomenda configuracao de execucao para cargas SQL analiticas. "
              "Use as tools de sondagem se disponiveis e finalize SEMPRE via submit_recommendation."},
-            {"role": "user", "content": f"{context}\n\n## Memorias de episodios anteriores\n{mem}"},
+            {"role": "user", "content": user_content},
         ]
         for _ in range(self.max_rounds):
             r = self.client.chat(ep.provider, messages, tools=tools, max_tokens=self.max_tokens)

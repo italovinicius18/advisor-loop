@@ -22,6 +22,8 @@ class FakeProbe:
     """Probe fake que sempre levanta ProbeBudgetExceeded em table_stats."""
     def table_stats(self, table):
         raise ProbeBudgetExceeded("budget esgotado")
+    def available_tables(self):
+        return ["store_sales", "store_returns", "date_dim"]
 
 def _submit_call():
     args = json.dumps({**CFG, "rationale": "workload medio"})
@@ -87,6 +89,39 @@ def test_advise_retries_after_out_of_bound_submit(tmp_path):
 def _unknown_tool_call():
     return LLMResponse(message={}, cost_usd=0.0002, tool_calls=[
         {"id": "u1", "function": {"name": "frobnicate", "arguments": "{}"}}])
+
+
+def test_advise_injects_real_table_list_when_probe_given(tmp_path):
+    """When a probe is active, the real table names must be injected into the
+    user context up front (turn 1) so the model has nothing to guess -
+    prevents hallucinated table names from other benchmarks (SSB/TPC-H)."""
+    j = Journal(tmp_path / "j.jsonl")
+    client = FakeClient([_submit_call()])
+    adv = Advisor(client, j)
+    ep = Episode(workload="w", dataset="sf100", queries=["q1"], provider="m")
+    adv.advise(ep, context="ctx", probe=FakeProbe(), memories=[])
+    user_msg = client.last_kwargs["messages"][1]["content"]
+    assert "Tabelas reais disponiveis" in user_msg
+    assert "store_sales" in user_msg
+    assert "store_returns" in user_msg
+    assert "date_dim" in user_msg
+    system_msg = client.last_kwargs["messages"][0]["content"]
+    assert "list_tables" in system_msg
+    assert "NUNCA invente" in system_msg
+
+
+def test_advise_system_prompt_forbids_table_name_invention_without_probe(tmp_path):
+    """The table-discipline instruction is a static system-prompt line - it
+    must be present even at L0 (no probe), it's just inert there."""
+    j = Journal(tmp_path / "j.jsonl")
+    client = FakeClient([_submit_call()])
+    adv = Advisor(client, j)
+    ep = Episode(workload="w", dataset="sf100", queries=["q1"], provider="m")
+    adv.advise(ep, context="ctx", probe=None, memories=[])
+    system_msg = client.last_kwargs["messages"][0]["content"]
+    assert "NUNCA invente" in system_msg
+    user_msg = client.last_kwargs["messages"][1]["content"]
+    assert "Tabelas reais disponiveis" not in user_msg
 
 
 def test_advise_forwards_max_tokens_when_configured(tmp_path):

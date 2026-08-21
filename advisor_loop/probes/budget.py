@@ -36,6 +36,12 @@ class BudgetedProbe:
         if not m or int(m.group(1)) > 10000:
             raise ValueError("sample_query exige LIMIT explicito <= 10000")
 
+    def available_tables(self) -> list[str]:
+        """Nomes reais das tabelas, sem custo de budget - e metadado, nao
+        sondagem de dados. Usado para injetar no contexto do advisor e evitar
+        que ele alucine nomes de tabela de outros benchmarks."""
+        return self._p.list_tables()
+
     def list_tables(self):
         self._spend()
         return self._p.list_tables()

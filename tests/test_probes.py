@@ -92,3 +92,15 @@ def test_s3_config_none_keeps_local_behavior_identical(store):
     assert probe.list_tables() == ["store_sales"]
     rows = probe.sample_query("SELECT id FROM store_sales LIMIT 3")
     assert len(rows) == 3
+
+
+def test_available_tables_does_not_spend_budget(store):
+    """available_tables() is metadata only (no data scan) - it must not
+    consume the probe budget, unlike list_tables()."""
+    b = BudgetedProbe(DuckDBProbe(store), max_probes=1)
+    assert b.available_tables() == ["store_sales"]
+    assert b.used == 0
+    b.list_tables()          # the one budgeted call still succeeds
+    assert b.used == 1
+    with pytest.raises(ProbeBudgetExceeded):
+        b.list_tables()
