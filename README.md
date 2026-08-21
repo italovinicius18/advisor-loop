@@ -61,9 +61,25 @@ advisor_loop/
   backends/replay.py    replay-from-reference execution backend
   knowledge/pack.py     knowledge pack fed to the advisor
   memory/store.py       cross-episode memory (optional)
-  probes/                DuckDB probes + budget checks
+  probes/                DuckDB probes + budget checks (local tunnel + in-cluster remote)
 campaigns/            campaign YAML configs
+service/              in-cluster DuckDB probe HTTP service (server + Dockerfile)
+kubernetes/           k8s manifests (duckdb-probe-service Deployment/Service)
 scripts/import_reference.py  reference-matrix importer
 data/reference.parquet       measured cost matrix (imported)
 evidence/                    per-campaign journals + summaries
 ```
+
+## Data probing: local tunnel vs. in-cluster service
+
+`advisor_loop.probes.duckdb_probe.DuckDBProbe` runs DuckDB locally against
+MinIO over the SSH tunnel (`s3:` block in `datasets.yaml`) - fine for dev and
+small scales, but every probed row streams through the tunnel.
+`advisor_loop.probes.remote_probe.RemoteDuckDBProbe` talks instead to
+`service/duckdb_probe_server.py`, a minimal DuckDB HTTP service meant to run
+in-cluster next to MinIO (`kubernetes/duckdb-probe-service.yaml`): only small
+SQL requests and small JSON results cross the tunnel. Both implement the same
+probe interface, so `BudgetedProbe` wraps either unchanged; `wiring.py`
+selects the remote client when `datasets.yaml` has a `probe_service.url`
+block, and falls back to the local tunnel path otherwise (see the commented
+example in `datasets.yaml`).

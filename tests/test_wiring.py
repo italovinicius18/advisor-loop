@@ -62,6 +62,29 @@ def test_build_deps_reads_s3_block_and_wires_probe_factory(tmp_path, monkeypatch
     assert probe.list_tables() == ["store_sales"]
 
 
+def test_build_deps_probe_service_url_selects_remote_probe(tmp_path, monkeypatch):
+    """datasets.yaml with a top-level probe_service.url block must wire the
+    remote in-cluster probe instead of the local tunnel-backed DuckDBProbe."""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    root = _root(tmp_path)
+    import duckdb
+    tbl = root / "data" / "store_sales.parquet"
+    duckdb.sql("SELECT range AS id FROM range(10)").write_parquet(str(tbl))
+    (root / "datasets.yaml").write_text(yaml.safe_dump({
+        "probe_service": {"url": "http://localhost:8000"},
+        "sf1": {"store_sales": str(tbl)},
+    }))
+    camp = _campaign(tmp_path, "remotecamp")
+    deps = build_deps(camp, root=root)
+    from advisor_loop.episode import Episode
+    from advisor_loop.probes.remote_probe import RemoteDuckDBProbe
+    ep = Episode(workload="w", dataset="sf1", queries=["q1"], provider="m")
+    probe = deps.probe_factory(ep)
+    assert probe is not None
+    assert isinstance(probe._p, RemoteDuckDBProbe)
+    assert probe.list_tables() == ["store_sales"]
+
+
 def test_build_deps_without_datasets_yaml_keeps_probe_factory_none(tmp_path, monkeypatch):
     """Backward-compat: no datasets.yaml -> probe_factory returns None (L0 behavior)."""
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")

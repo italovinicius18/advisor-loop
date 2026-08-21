@@ -9,6 +9,7 @@ from advisor_loop.knowledge.pack import KnowledgePack
 from advisor_loop.memory.store import MemoryStore
 from advisor_loop.probes.budget import BudgetedProbe
 from advisor_loop.probes.duckdb_probe import DuckDBProbe
+from advisor_loop.probes.remote_probe import RemoteDuckDBProbe
 from advisor_loop.runner import Deps
 
 def build_deps(campaign_path: Path, root: Path = Path(".")) -> Deps:
@@ -23,11 +24,20 @@ def build_deps(campaign_path: Path, root: Path = Path(".")) -> Deps:
     if ds_file.exists():
         ds_config = yaml.safe_load(ds_file.read_text()) or {}
     s3_config = ds_config.get("s3")
-    tables_by_dataset = {k: v for k, v in ds_config.items() if k != "s3"}
+    probe_service = ds_config.get("probe_service")
+    tables_by_dataset = {k: v for k, v in ds_config.items() if k not in ("s3", "probe_service")}
 
     def probe_factory(ep):
         tables = tables_by_dataset.get(ep.dataset)
-        return BudgetedProbe(DuckDBProbe(tables, s3_config=s3_config)) if tables else None
+        if not tables:
+            return None
+        # probe_service: push compute to the data - an in-cluster DuckDB HTTP
+        # service (kubernetes/duckdb-probe-service.yaml) runs next to MinIO
+        # and small SQL/JSON crosses the tunnel instead of table data. Falls
+        # back to the local DuckDBProbe-over-tunnel path when unset.
+        if probe_service and probe_service.get("url"):
+            return BudgetedProbe(RemoteDuckDBProbe(probe_service["url"], tables))
+        return BudgetedProbe(DuckDBProbe(tables, s3_config=s3_config))
 
     backend = (ProposalBackend() if camp.get("backend") == "proposal"
                else ReplayBackend(root / "data" / "reference.parquet"))

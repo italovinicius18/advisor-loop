@@ -7,6 +7,13 @@ s3:
   use_ssl: false
   url_style: "path"
 
+# probe_service: opt-in to the in-cluster DuckDB HTTP probe (compute next to
+# the data, kubernetes/duckdb-probe-service.yaml) instead of the local
+# DuckDBProbe-over-tunnel path above. Uncomment once the service is deployed
+# and port-forwarded (or reachable via its ClusterIP from in-cluster jobs).
+# probe_service:
+#   url: "http://localhost:8000"
+
 sf1:
   call_center: "s3://silver/sf1/delta/parquet/call_center"
   catalog_page: "s3://silver/sf1/delta/parquet/catalog_page"
