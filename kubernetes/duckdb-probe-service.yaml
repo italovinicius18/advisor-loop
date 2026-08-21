@@ -5,7 +5,8 @@
 # SQL strings over the tunnel and gets small JSON results back, instead of
 # streaming Delta/Parquet data through a local DuckDB over SSH. Client:
 # advisor_loop/probes/remote_probe.py (RemoteDuckDBProbe). Server source:
-# service/duckdb_probe_server.py. Image built from service/Dockerfile.
+# service/duckdb_probe_server.py. Image built from service/Dockerfile, pushed
+# to GHCR (ghcr.io/italovinicius18/advisor-duckdb-probe).
 #
 # Deploy:  kubectl apply -f kubernetes/duckdb-probe-service.yaml
 # =============================================================================
@@ -27,9 +28,12 @@ spec:
         app: duckdb-probe
     spec:
       serviceAccountName: ns-admin
+      # If the GHCR package is private, uncomment and provide a docker-registry
+      # secret named ghcr-pull in this namespace; public packages need none.
+      # imagePullSecrets: [{name: ghcr-pull}]
       containers:
       - name: duckdb-probe
-        image: ttl.sh/advisor-duckdb-probe:PLACEHOLDER   # controller substitutes the real tag
+        image: ghcr.io/italovinicius18/advisor-duckdb-probe:PLACEHOLDER   # controller substitutes the real tag
         imagePullPolicy: Always
         ports:
         - containerPort: 8000
