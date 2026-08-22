@@ -1,0 +1,8 @@
+name: tpcds-sf10-initial
+level: L0
+provider: deepseek/deepseek-v4-flash-0731
+datasets: [sf10]
+queries: [q07, q72, q99, q06, q10, q15, q17, q44]
+objective: min_time
+tries: 1
+memory: "off"
