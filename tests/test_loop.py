@@ -1,0 +1,51 @@
+from advisor_loop.loop import optimize
+from advisor_loop.episode import ConfigVector, Outcome, QueryResult, Episode, Recommendation
+from advisor_loop.guardian import Guardian
+from advisor_loop.journal import Journal
+from advisor_loop.memory.store import MemoryStore
+
+CLUSTER={"max_cores_per_container":24,"max_memory_gb_per_container":96,"max_pods":20,"total_cores":100,"total_memory_gb":400}
+CFG=dict(executor_cores=8,executor_memory_gb=28,executor_instances=6,driver_memory_gb=8,shuffle_partitions=200,advisory_partition_mb=64,aqe_enabled=True,broadcast_threshold_mb=10)
+
+class ScriptAdvisor:
+    """devolve configs/durações roteirizadas por iteração."""
+    def __init__(self, durations): self.durations=list(durations); self.i=0
+    def advise(self, ep, ctx, probe, mems, history=None):
+        self.i+=1
+        return Recommendation(rationale="", config=ConfigVector(**{**CFG,"executor_instances":5+self.i}))
+
+class ScriptBackend:
+    def __init__(self, durations): self.durations=list(durations)
+    def execute(self, ep, rec):
+        d=self.durations.pop(0)
+        if d is None: return Outcome(status="oom")
+        return Outcome(status="completed", per_query={ep.queries[0]:QueryResult(status="success",duration_ms=d)}, wall_clock_s=d/1000)
+
+class Pack:
+    hash="h";
+    def render(self,ep): return "ctx"
+
+def _deps(tmp_path, backend):
+    from advisor_loop.runner import Deps
+    return Deps(client=None, journal=Journal(tmp_path/"j.jsonl"), pack=Pack(),
+               guardian=Guardian(CLUSTER), backend=backend, memory=MemoryStore(tmp_path/"m.jsonl"),
+               probe_factory=lambda ep: None)
+
+def test_stops_on_no_improvement(tmp_path):
+    ep=Episode(workload="w",dataset="sf1",queries=["q03"],provider="m")
+    be=ScriptBackend([5000, 4000, 4200, 4300, 4100])
+    r=optimize(ep, _deps(tmp_path,be), ScriptAdvisor([]), max_iters=5, patience=2)
+    assert r["best_duration_ms"]==4000
+    assert len(r["iterations"])==4
+
+def test_stops_on_max_iters(tmp_path):
+    ep=Episode(workload="w",dataset="sf1",queries=["q03"],provider="m")
+    be=ScriptBackend([5000,4900,4800,4700,4600])
+    r=optimize(ep, _deps(tmp_path,be), ScriptAdvisor([]), max_iters=3, patience=2)
+    assert len(r["iterations"])==3 and r["best_duration_ms"]==4800
+
+def test_oom_does_not_crash(tmp_path):
+    ep=Episode(workload="w",dataset="sf1",queries=["q03"],provider="m")
+    be=ScriptBackend([None, 4000, 4100, 4200])
+    r=optimize(ep, _deps(tmp_path,be), ScriptAdvisor([]), max_iters=4, patience=2)
+    assert r["best_duration_ms"]==4000
