@@ -1,4 +1,21 @@
-from spark_advisor.driver import build_result, classify_error, throughput_mbps
+from spark_advisor.driver import (accumulate, build_result, classify_error,
+                                   throughput_mbps, zero_metrics)
+
+
+def test_zero_metrics_keys():
+    z = zero_metrics()
+    assert z["shuffle_write_bytes"] == 0 and z["gc_time_ms"] == 0
+    assert set(z) >= {"input_bytes", "output_bytes", "shuffle_read_bytes",
+                      "shuffle_write_bytes", "gc_time_ms", "memory_spill_bytes",
+                      "disk_spill_bytes", "records_read"}
+
+
+def test_accumulate_sums_stages_and_tolerates_missing():
+    acc = zero_metrics()
+    accumulate(acc, {"shuffle_write_bytes": 100, "gc_time_ms": 5, "input_bytes": None})
+    accumulate(acc, {"shuffle_write_bytes": 50, "gc_time_ms": 3})
+    assert acc["shuffle_write_bytes"] == 150 and acc["gc_time_ms"] == 8
+    assert acc["input_bytes"] == 0   # None e ausente contam como 0
 
 
 def test_throughput():

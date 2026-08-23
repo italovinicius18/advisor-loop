@@ -653,8 +653,23 @@ Imagem: `ghcr.io/italovinicius18/spark-advisor:4.2.0-delta-r3` (pública, GHCR).
 - Ambos os caminhos de resultado validados: marcador `ADVISOR_RESULT ` no stdout
   do driver **e** objeto JSON no MinIO (`s3://advisor-results/<run_id>.json`)
 
+### Métricas reais no histórico do LLM (2026-08-23, follow-up)
+Antes o LLM decidia a próxima iteração **só pelo tempo** (o `render_history` só
+expunha `duração`/`status`), e o dict de métricas do driver era zerado. Corrigido:
+- **SparkListener via py4j** no driver (`_register_metrics_listener`) acumula
+  `taskMetrics` por stage: input/output bytes, shuffle read/write, spill
+  (mem+disk), GC, records. Zerado logo antes do query p/ isolar dos reads de
+  metadata do Delta; `listenerBus().waitUntilEmpty` antes de ler. Degradação
+  graciosa (nunca derruba o job).
+- Gotcha resolvido: `start_callback_server()` sobe numa porta aleatória mas o
+  Java mantinha o CallbackClient na porta default → `Connection refused` e
+  métricas zeradas. Fix: `resetCallbackClient(addr, porta_real)`.
+- `render_history` agora injeta as métricas na linha de cada iteração, ex.:
+  `iter 1: 2c/4g/1w → 34137.6ms (in=470.4KB, shuffle_r=57.9KB, shuffle_w=57.9KB, gc=383ms)`.
+- Validado ao vivo (SF1/q03): `input_bytes=481690, records_read=2971504,
+  shuffle=59331, gc=383ms`, 0 erros de listener.
+
 ### Pendências conhecidas (documentadas, não bloqueantes)
-- Métricas de I/O do driver ainda zeradas (sem SparkListener) — duração é real.
 - `node_selector` de nó único limita paralelismo à capacidade do nó; para escalas
   maiores, rotular N nós com egress e fixar pelo label (não por hostname único).
 - `cost_usd` no summary é 0 (custo real fica nos eventos `llm_call` do journal).

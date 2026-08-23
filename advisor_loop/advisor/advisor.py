@@ -41,18 +41,46 @@ _PROBE_TOOLS = [
                        "properties": {"sql": {"type": "string"}}}}},
 ]
 
+def _fmt_bytes(n) -> str:
+    n = float(n or 0)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024 or unit == "TB":
+            return f"{n:.0f}{unit}" if unit == "B" else f"{n:.1f}{unit}"
+        n /= 1024
+
+
+def fmt_metrics(m: dict) -> str:
+    """Resumo compacto das métricas reais (só campos não-zero) para o histórico
+    do LLM - dá sinais causais (shuffle/spill/gc) além do tempo puro."""
+    if not m:
+        return ""
+    parts = []
+    if m.get("input_bytes"):
+        parts.append(f"in={_fmt_bytes(m['input_bytes'])}")
+    if m.get("shuffle_read_bytes"):
+        parts.append(f"shuffle_r={_fmt_bytes(m['shuffle_read_bytes'])}")
+    if m.get("shuffle_write_bytes"):
+        parts.append(f"shuffle_w={_fmt_bytes(m['shuffle_write_bytes'])}")
+    spill = (m.get("memory_spill_bytes", 0) or 0) + (m.get("disk_spill_bytes", 0) or 0)
+    if spill:
+        parts.append(f"spill={_fmt_bytes(spill)}")
+    if m.get("gc_time_ms"):
+        parts.append(f"gc={m['gc_time_ms']:g}ms")
+    return f" ({', '.join(parts)})" if parts else ""
+
+
 def render_history(history: list[tuple[ConfigVector, Outcome]]) -> str:
-    """Uma linha por iteracao anterior desta query: config + duracao (sucesso)
-    ou status (falha, ex.: oom) - realimenta o advisor com resultados reais em
-    vez dele adivinhar as configs seguintes as cegas."""
+    """Uma linha por iteracao anterior desta query: config + duracao + metricas
+    reais (sucesso) ou status (falha, ex.: oom) - realimenta o advisor com
+    resultados reais (tempo E shuffle/spill/gc) em vez de adivinhar as cegas."""
     lines = []
     for i, (cv, outcome) in enumerate(history, start=1):
         prefix = (f"iter {i}: {cv.executor_cores}c/{cv.executor_memory_gb}g/"
                   f"{cv.executor_instances}w")
-        dur = next((qr.duration_ms for qr in outcome.per_query.values()
-                    if qr.status == "success" and qr.duration_ms is not None), None)
-        if dur is not None:
-            lines.append(f"{prefix} → {dur:g}ms")
+        qr = next((q for q in outcome.per_query.values()
+                   if q.status == "success" and q.duration_ms is not None), None)
+        if qr is not None:
+            lines.append(f"{prefix} → {qr.duration_ms:g}ms{fmt_metrics(qr.metrics)}")
         else:
             lines.append(f"{prefix} → {outcome.status}")
     return "\n".join(lines)
