@@ -45,7 +45,8 @@ def build_deps(campaign_path: Path, root: Path = Path(".")) -> Deps:
 
     if camp.get("backend") == "spark_k8s":
         backend = SparkK8sBackend(SparkSubmitter(ssh_cmd=spark_config["ssh_cmd"],
-                                                  image=spark_config["image"]))
+                                                  image=spark_config["image"],
+                                                  node_selector=spark_config.get("node_selector")))
     elif camp.get("backend") == "proposal":
         backend = ProposalBackend()
     else:

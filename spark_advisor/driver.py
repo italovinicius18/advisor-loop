@@ -62,11 +62,16 @@ def main():   # coberto pela validação ao vivo, não por unit test
     ]
     try:
         base = f"s3a://silver/{sf}/delta/parquet"
+        loaded = []
         for name in TPCDS_TABLES:
             try:
                 spark.read.format("delta").load(f"{base}/{name}").createOrReplaceTempView(name)
-            except Exception:
-                pass
+                loaded.append(name)
+            except Exception as le:
+                # nao silenciar: registrar a causa real (antes um `except: pass`
+                # mascarava falhas de s3a/delta e a query estourava com TABLE_NOT_FOUND)
+                print(f"ADVISOR_LOAD_ERROR {name}: {str(le)[:300]}", flush=True)
+        print(f"ADVISOR_LOADED {len(loaded)}/{len(TPCDS_TABLES)}: {loaded}", flush=True)
         sql = open(f"/opt/advisor/queries/{query}.sql").read().strip().rstrip(";").strip()
         t0 = time.time()
         spark.sql(sql).write.format("noop").mode("overwrite").save()

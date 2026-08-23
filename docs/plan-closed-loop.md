@@ -611,3 +611,50 @@ Nota: os jars Delta precisam estar disponíveis ao spark-submit (via `--packages
 1. **Cobertura da spec**: §2.1 componentes → Tasks 5 (Submitter), 6 (Backend), 8 (Loop), 7 (advise history), 1 (QueryResult.metrics). §2.2 tradução → Task 3. §2.3 driver+métricas+MinIO → Task 2 (+ live tune Task 9). §2.4 submit SSH→kubectl+poll+result+cleanup → Tasks 4-5. §2.5 laço/parada → Task 8. §3 feedback → Task 7. §4 erro/segurança (guardian, timeout, 1-por-vez, cleanup, crash-mascarado) → Tasks 5,6,8. §5 testes → cada task. §7 imagem dedicada GHCR + MinIO+logs → Tasks 2,9. §6 marcos F1-F3 → Tasks 2-5 (F1), 6-9 (F2), 9 (F3).
 2. **Placeholders**: nenhum TBD; todo step tem código/comando. As partes validadas só ao vivo (driver.main, jars Delta, métricas finas) estão explicitamente marcadas como live-tune (Task 9), não como placeholder — as funções puras têm testes.
 3. **Consistência de tipos**: `spark_confs`(T3)→`render_launcher`(T4)→`SparkSubmitter.submit`(T5)→`SparkK8sBackend.execute`(T6); dict de resultado `{status,duration_ms,metrics,error}` consistente T2/T5/T6; `render_history`/`advise(history=)`(T7) usados por `optimize`(T8); `Deps` reusada de runner.py em T8. `QueryResult.metrics` (T1) preenchido em T6.
+
+---
+
+## Validação ao vivo (2026-08-23) — CONCLUÍDA
+
+Fluxo fechado **validado ponta a ponta** no cluster RNP (SF1/q03), com uso leve
+para não contaminar o exp05 em curso (config pequena, nó ocioso `ids-pb`).
+
+### Migração para Spark 4.2 (decisão do usuário)
+A imagem migrou de Spark 3.5/Delta 3.2 para **Spark 4.2.0 + Delta 4.4.0** (Scala
+2.13, Java 17) — par oficial (Delta 4.4.0 compila contra spark-sql 4.2.0). A
+lógica do advisor/loop é agnóstica de versão; só imagem + confs + driver mudaram.
+Imagem: `ghcr.io/italovinicius18/spark-advisor:4.2.0-delta-r3` (pública, GHCR).
+
+### Achados resolvidos na validação (não capturáveis por unit test)
+1. **Ivy em runtime falha no pod** (`spark.jars.packages` → cache não-gravável /
+   egress). Fix: **assar todos os JARs na imagem** (Delta 4.4 + delta-storage +
+   hadoop-aws 3.5.0 + AWS SDK v2 bundle 2.35.4 + **analyticsaccelerator-s3 1.3.1**,
+   dependência obrigatória do S3A no Hadoop 3.5).
+2. **deploy-mode cluster**: driver roda em pod separado → env não chega e o
+   `ADVISOR_RESULT` sai no log do DRIVER. Fix: `driverEnv.*` + `driver.pod.name`
+   previsível + submitter lê/limpa o pod driver.
+3. **AWS SDK v2 (Hadoop 3.5)** exige `fs.s3a.endpoint.region` mesmo p/ MinIO.
+4. **ANSI on por padrão no Spark 4** quebraria a Silver toda-VARCHAR (escrita em
+   3.5). Fix: `spark.sql.ansi.enabled=false` (mantém semântica de origem).
+5. **DNS ao ghcr.io intermitente** em alguns nós + imagem só cacheada em alguns.
+   Fix: `pullPolicy=IfNotPresent` + **`node_selector`** opcional (via datasets.yaml)
+   fixando driver+executors num nó com egress/imagem — também isola do exp05.
+6. **`subprocess.run` real** precisa `capture_output=True, text=True` (o fake
+   runner dos testes mascarava; o `.stdout=None` só quebrou ao vivo). Fix + teste
+   de regressão.
+7. **Driver silenciava falhas de load** (`except: pass`) → mascarava a causa e a
+   query estourava `TABLE_NOT_FOUND`. Fix: logar `ADVISOR_LOAD_ERROR`/`ADVISOR_LOADED`.
+
+### Resultado (campaign `closed-loop-sf1`, 2 iterações)
+- iter 1: q03 SF1 = **19903.8 ms** (success, 24/24 tabelas)
+- iter 2: **19507.1 ms** (best) — advisor re-propôs vendo o histórico
+- `opt_result.best_duration_ms = 19507.1`; loop escolheu a melhor config
+- Custo LLM real ~US$0.0004 (deepseek-v4-flash); cluster limpo após o run
+- Ambos os caminhos de resultado validados: marcador `ADVISOR_RESULT ` no stdout
+  do driver **e** objeto JSON no MinIO (`s3://advisor-results/<run_id>.json`)
+
+### Pendências conhecidas (documentadas, não bloqueantes)
+- Métricas de I/O do driver ainda zeradas (sem SparkListener) — duração é real.
+- `node_selector` de nó único limita paralelismo à capacidade do nó; para escalas
+  maiores, rotular N nós com egress e fixar pelo label (não por hostname único).
+- `cost_usd` no summary é 0 (custo real fica nos eventos `llm_call` do journal).

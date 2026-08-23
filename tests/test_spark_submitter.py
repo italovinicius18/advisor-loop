@@ -9,6 +9,7 @@ class FakeRunner:
         self.apply_returncode = apply_returncode
     def __call__(self, cmd, **kw):
         import types
+        self.kwargs = kw
         self.calls.append(cmd)
         joined = " ".join(cmd)
         out = ""
@@ -40,6 +41,16 @@ def test_pod_failed_is_failed():
     s = SparkSubmitter(ssh_cmd=["ssh","host"], image="img", runner=r, poll_interval_s=0)
     res = s.submit(_cv(), "sf1", "q03", "r3")
     assert res["status"] in ("failed","oom")
+
+
+def test_run_passes_capture_output_and_text():
+    # regressao: subprocess.run real precisa de capture_output+text senao
+    # .stdout=None e o parse quebra (fake runner mascarava isso).
+    r = FakeRunner(phases=["Succeeded"], logs="no marker")
+    s = SparkSubmitter(ssh_cmd=["ssh", "host"], image="img", runner=r, poll_interval_s=0)
+    s.submit(_cv(), "sf1", "q03", "rk")
+    assert r.kwargs.get("capture_output") is True
+    assert r.kwargs.get("text") is True
 
 
 def test_apply_failure_returns_failed_without_polling():

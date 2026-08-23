@@ -20,21 +20,30 @@ class SparkSubmitter:
 
     def __init__(self, ssh_cmd: list[str], image: str, result_bucket: str = "advisor-results",
                  poll_interval_s: float = 10, max_wall_clock_s: float = 1200,
-                 runner=subprocess.run):
+                 node_selector: dict | None = None, runner=subprocess.run):
         self.ssh_cmd = ssh_cmd
         self.image = image
         self.result_bucket = result_bucket
         self.poll_interval_s = poll_interval_s
         self.max_wall_clock_s = max_wall_clock_s
+        self.node_selector = node_selector
         self.runner = runner
 
     def _run(self, remote_cmd: str):
-        return self.runner(self.ssh_cmd + [remote_cmd])
+        # capture_output+text: sem isso o subprocess.run real devolve .stdout=None
+        # e o parse (.strip()/logs) quebra — os testes usam um runner fake que ja
+        # popula .stdout, entao so a execucao real expunha esse buraco.
+        return self.runner(self.ssh_cmd + [remote_cmd], capture_output=True, text=True)
 
     def submit(self, config: ConfigVector, sf: str, query: str, run_id: str) -> dict:
-        pod_name = f"advisor-{run_id}"
+        # deploy-mode cluster: o pod launcher roda spark-submit (bloqueante via
+        # waitAppCompletion) e CRIA um pod driver separado. O marcador
+        # ADVISOR_RESULT sai no stdout do DRIVER, nao do launcher.
+        launcher_pod = f"advisor-{run_id}"
+        driver_pod = f"advisor-{run_id}-driver"
         result_s3 = f"s3://{self.result_bucket}/{run_id}.json"
-        manifest = render_launcher(config, sf, query, run_id, self.image, result_s3)
+        manifest = render_launcher(config, sf, query, run_id, self.image, result_s3,
+                                   node_selector=self.node_selector)
 
         try:
             apply_result = self._run(f"cat <<'EOF' | kubectl apply -f -\n{manifest}\nEOF")
@@ -42,28 +51,32 @@ class SparkSubmitter:
                 return {"status": "failed", "duration_ms": None, "metrics": {},
                         "error": f"apply failed: {apply_result.stdout}"}
 
-            phase = self._poll(pod_name)
+            phase = self._poll(launcher_pod)
 
             if phase == "timeout":
                 return {"status": "failed", "duration_ms": None, "metrics": {},
-                        "error": f"timeout waiting for pod {pod_name} (>{self.max_wall_clock_s}s)"}
+                        "error": f"timeout waiting for pod {launcher_pod} (>{self.max_wall_clock_s}s)"}
 
-            logs = self._run(f"kubectl logs {pod_name}").stdout
+            # logs do DRIVER carregam o ADVISOR_RESULT; fallback p/ launcher se o
+            # driver nem chegou a ser criado (ex.: erro de submit/imagem no launcher).
+            driver_logs = self._run(f"kubectl logs {driver_pod}").stdout or ""
+            launcher_logs = self._run(f"kubectl logs {launcher_pod}").stdout or ""
 
+            result = self._parse_result(driver_logs) or self._parse_result(launcher_logs)
+            if result is not None:
+                # status do proprio driver e autoritativo (success/oom/timeout/failed)
+                return result
+
+            # sem marcador: classificar pelo texto dos logs (driver + launcher)
+            combined = (driver_logs + "\n" + launcher_logs)[:2000]
             if phase == "Succeeded":
-                result = self._parse_result(logs)
-                if result is not None:
-                    return result
-                # TODO: fallback via `mc cat` do MinIO (result_s3) antes de desistir —
-                # o driver grava em ambos (Task 2), mas logs bastam para o primeiro corte.
                 return {"status": "failed", "duration_ms": None, "metrics": {},
-                        "error": "pod Succeeded but no ADVISOR_RESULT marker in logs (driver crash mascarado)"}
-
-            # phase == "Failed"
-            return {"status": classify_error(logs), "duration_ms": None, "metrics": {},
-                    "error": logs[:500]}
+                        "error": "launcher Succeeded mas sem ADVISOR_RESULT (driver crash mascarado): "
+                                 + combined[:400]}
+            return {"status": classify_error(combined), "duration_ms": None, "metrics": {},
+                    "error": combined[:500]}
         finally:
-            self._run(f"kubectl delete pod {pod_name}")
+            self._run(f"kubectl delete pod {launcher_pod} {driver_pod} --ignore-not-found")
 
     def _poll(self, pod_name: str) -> str:
         elapsed = 0.0
