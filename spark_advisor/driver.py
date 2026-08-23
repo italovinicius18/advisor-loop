@@ -172,4 +172,19 @@ def main():   # coberto pela validação ao vivo, não por unit test
 
 
 if __name__ == "__main__":
-    main()
+    # o callback server py4j do SparkListener é uma thread NÃO-daemon: após o
+    # main() o processo do driver não encerraria sozinho, o pod ficaria vivo e o
+    # submitter estouraria o timeout (marcando "error" apesar do sucesso já
+    # gravado). Como resultado/stdout/MinIO já foram flushados no main(),
+    # forçamos o término com o exit code correto.
+    _rc = 0
+    try:
+        main()
+    except SystemExit as _e:
+        _rc = _e.code if isinstance(_e.code, int) else 1
+    except BaseException as _e:
+        print("ADVISOR_FATAL " + str(_e)[:300], flush=True)
+        _rc = 1
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(_rc)
