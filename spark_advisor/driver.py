@@ -50,18 +50,24 @@ def main():   # coberto pela validação ao vivo, não por unit test
     # métricas via listener
     metrics = {"input_bytes": 0, "output_bytes": 0, "shuffle_read_bytes": 0,
                "shuffle_write_bytes": 0, "gc_time_ms": 0}
+    # todas as tabelas TPC-DS (registrar as que existirem na Silver evita
+    # a fragilidade de extrair nomes do SQL — joins por virgula/alias)
+    TPCDS_TABLES = [
+        "call_center", "catalog_page", "catalog_returns", "catalog_sales",
+        "customer", "customer_address", "customer_demographics", "date_dim",
+        "household_demographics", "income_band", "inventory", "item",
+        "promotion", "reason", "ship_mode", "store", "store_returns",
+        "store_sales", "time_dim", "warehouse", "web_page", "web_returns",
+        "web_sales", "web_site",
+    ]
     try:
         base = f"s3a://silver/{sf}/delta/parquet"
-        # registra todas as tabelas TPC-DS como views
-        import re
-        sql = open(f"/opt/advisor/queries/{query}.sql").read()
-        tables = set(re.findall(r"\bfrom\s+([a-z_]+)|\bjoin\s+([a-z_]+)", sql, re.I))
-        names = {t for pair in tables for t in pair if t}
-        for name in names:
+        for name in TPCDS_TABLES:
             try:
                 spark.read.format("delta").load(f"{base}/{name}").createOrReplaceTempView(name)
             except Exception:
                 pass
+        sql = open(f"/opt/advisor/queries/{query}.sql").read().strip().rstrip(";").strip()
         t0 = time.time()
         spark.sql(sql).write.format("noop").mode("overwrite").save()
         dur = (time.time() - t0) * 1000

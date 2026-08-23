@@ -1,9 +1,19 @@
--- Placeholder q03 (TPC-DS-like) para a imagem spark-advisor. O controller
--- substitui/popula o SQL real das queries TPC-DS na fase de smoke ao vivo
--- (Task 9 Step 7); este placeholder so garante que o COPY queries/ do
--- Dockerfile funciona e que o driver tem algo executavel para validar o
--- pipeline pod->kubectl->resultado antes de trocar pelo SQL definitivo.
-SELECT count(*)
-FROM store_sales ss
-JOIN date_dim d ON ss.ss_sold_date_sk = d.d_date_sk
-WHERE d.d_year = 2001
+SELECT dt.d_year,
+       item.i_brand_id brand_id,
+       item.i_brand brand,
+       sum(ss_ext_sales_price) sum_agg
+FROM date_dim dt,
+     store_sales,
+     item
+WHERE dt.d_date_sk = store_sales.ss_sold_date_sk
+  AND store_sales.ss_item_sk = item.i_item_sk
+  AND item.i_manufact_id = 128
+  AND dt.d_moy=11
+GROUP BY dt.d_year,
+         item.i_brand,
+         item.i_brand_id
+ORDER BY dt.d_year,
+         sum_agg DESC,
+         brand_id
+LIMIT 100
+
