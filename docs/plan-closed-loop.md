@@ -673,3 +673,15 @@ expunha `duração`/`status`), e o dict de métricas do driver era zerado. Corri
 - `node_selector` de nó único limita paralelismo à capacidade do nó; para escalas
   maiores, rotular N nós com egress e fixar pelo label (não por hostname único).
 - `cost_usd` no summary é 0 (custo real fica nos eventos `llm_call` do journal).
+
+### Piloto SF1 completo com métricas no histórico (2026-08-23)
+4 iterações, todas success (o fix de término do driver eliminou o falso "error"
+por timeout do submitter). Métricas reais agora persistidas no journal por iteração
+e realimentadas ao LLM via `render_history`:
+- iter 1: 8×8c/28g → 20051ms (shuffle_w=114KB, gc=3657ms)
+- iter 2: 4×8c/28g → 19906ms (shuffle_w=124KB, gc=3288ms)
+- iter 3: 2×4c/14g → 23255ms (shuffle_w=100KB, gc=1140ms)  # menor exec = mais lento
+- iter 4: 4×12c/48g → **19387ms (best)** (shuffle_w=104KB, gc=4691ms)
+best_config = 4×12c/48g, shuffle=100. Custo LLM ~US$0.001. (Configs fixadas em
+ids-pb via node_selector; paralelismo real limitado à capacidade do nó — o sinal
+de otimização entre configs é ilustrativo, não conclusivo nessa escala/pin.)
