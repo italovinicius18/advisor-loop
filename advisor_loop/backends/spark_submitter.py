@@ -50,6 +50,8 @@ class SparkSubmitter:
                 result = self._parse_result(logs)
                 if result is not None:
                     return result
+                # TODO: fallback via `mc cat` do MinIO (result_s3) antes de desistir —
+                # o driver grava em ambos (Task 2), mas logs bastam para o primeiro corte.
                 return {"status": "failed", "duration_ms": None, "metrics": {},
                         "error": "pod Succeeded but no ADVISOR_RESULT marker in logs (driver crash mascarado)"}
 
