@@ -239,6 +239,21 @@ def test_render_history_lines():
     assert "4300" in s and "oom" in s and "12w" in s
 
 
+def test_render_history_includes_metrics():
+    from advisor_loop.advisor.advisor import fmt_metrics
+    cv = ConfigVector(**CFG)
+    m = {"input_bytes": 1_500_000, "shuffle_write_bytes": 2 * 1024**3,
+         "memory_spill_bytes": 1024**2, "gc_time_ms": 3400}
+    hist = [(cv, Outcome(status="completed",
+                         per_query={"q": QueryResult(status="success",
+                                                     duration_ms=19507.1, metrics=m)}))]
+    s = render_history(hist)
+    assert "19507" in s
+    assert "shuffle_w=2.0GB" in s and "spill=1.0MB" in s and "gc=3400ms" in s
+    # métricas ausentes/zero não poluem a linha
+    assert fmt_metrics({}) == "" and fmt_metrics({"input_bytes": 0}) == ""
+
+
 def test_history_injected_into_context(tmp_path):
     j = Journal(tmp_path / "j.jsonl")
     client = FakeClient([_submit_call()])

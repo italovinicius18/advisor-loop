@@ -39,7 +39,7 @@ spark:
   - '2200'
   - -i
   - /home/italo/.ssh/rnp
-  image: ghcr.io/italovinicius18/spark-advisor:4.2.0-delta-r3
+  image: ghcr.io/italovinicius18/spark-advisor:4.2.0-delta-r5
   # cluster heterogeneo (DNS/egress irregular): fixa driver+executors num no
   # com egress e a imagem cacheada, evitando ImagePullBackOff/contaminacao.
   node_selector:
