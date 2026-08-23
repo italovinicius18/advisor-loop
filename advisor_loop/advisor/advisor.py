@@ -1,6 +1,6 @@
 import json
 import pydantic
-from advisor_loop.episode import ConfigVector, Episode, Recommendation
+from advisor_loop.episode import ConfigVector, Episode, Outcome, Recommendation
 from advisor_loop.journal import Journal
 from advisor_loop.probes.budget import ProbeBudgetExceeded
 from advisor_loop.probes.duckdb_probe import ProbeTimeout, ProbeQueryError
@@ -41,16 +41,39 @@ _PROBE_TOOLS = [
                        "properties": {"sql": {"type": "string"}}}}},
 ]
 
+def render_history(history: list[tuple[ConfigVector, Outcome]]) -> str:
+    """Uma linha por iteracao anterior desta query: config + duracao (sucesso)
+    ou status (falha, ex.: oom) - realimenta o advisor com resultados reais em
+    vez dele adivinhar as configs seguintes as cegas."""
+    lines = []
+    for i, (cv, outcome) in enumerate(history, start=1):
+        prefix = (f"iter {i}: {cv.executor_cores}c/{cv.executor_memory_gb}g/"
+                  f"{cv.executor_instances}w")
+        dur = next((qr.duration_ms for qr in outcome.per_query.values()
+                    if qr.status == "success" and qr.duration_ms is not None), None)
+        if dur is not None:
+            lines.append(f"{prefix} → {dur:g}ms")
+        else:
+            lines.append(f"{prefix} → {outcome.status}")
+    return "\n".join(lines)
+
+
 class Advisor:
     def __init__(self, client, journal: Journal, max_rounds: int = 12,
                  max_tokens: int | None = None):
         self.client, self.journal, self.max_rounds = client, journal, max_rounds
         self.max_tokens = max_tokens
 
-    def advise(self, ep: Episode, context: str, probe, memories: list[str]) -> Recommendation:
+    def advise(self, ep: Episode, context: str, probe, memories: list[str],
+               history: list[tuple[ConfigVector, Outcome]] = []) -> Recommendation:
         tools = [_SUBMIT] + (_PROBE_TOOLS if probe else [])
         mem = "\n".join(f"- {m}" for m in memories) or "(sem memorias)"
         user_content = f"{context}\n\n## Memorias de episodios anteriores\n{mem}"
+        if history:
+            user_content = (
+                f"{user_content}\n\n## Iteracoes anteriores nesta query (min_time)\n"
+                f"{render_history(history)}\nProponha uma config que REDUZA o tempo; "
+                "se alguma falhou por OOM, ajuste memoria/paralelismo.")
         if probe is not None:
             user_content = (
                 "IMPORTANTE: as colunas das tabelas Silver sao todas VARCHAR (nao "
