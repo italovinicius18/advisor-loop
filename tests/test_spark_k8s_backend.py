@@ -35,3 +35,21 @@ def test_execute_oom_propagates():
     ep = Episode(workload="w", dataset="sf1", queries=["q03"], provider="m")
     out = be.execute(ep, _rec())
     assert out.status == "oom" and out.per_query["q03"].status == "oom"
+
+
+def test_execute_failed_query_maps_outcome_to_error_not_crash():
+    sub = FakeSubmitter({"status":"failed","duration_ms":None,"metrics":{},"error":"boom"})
+    be = SparkK8sBackend(sub, run_id_fn=lambda: "rid")
+    ep = Episode(workload="w", dataset="sf1", queries=["q03"], provider="m")
+    out = be.execute(ep, _rec())
+    assert out.status == "error"
+    assert out.per_query["q03"].status == "failed"
+
+
+def test_execute_timeout_query_maps_outcome_to_error():
+    sub = FakeSubmitter({"status":"timeout","duration_ms":None,"metrics":{},"error":"timeout"})
+    be = SparkK8sBackend(sub, run_id_fn=lambda: "rid")
+    ep = Episode(workload="w", dataset="sf1", queries=["q03"], provider="m")
+    out = be.execute(ep, _rec())
+    assert out.status == "error"
+    assert out.per_query["q03"].status == "timeout"

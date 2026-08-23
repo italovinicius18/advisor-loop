@@ -37,7 +37,11 @@ class SparkSubmitter:
         manifest = render_launcher(config, sf, query, run_id, self.image, result_s3)
 
         try:
-            self._run(f"cat <<'EOF' | kubectl apply -f -\n{manifest}\nEOF")
+            apply_result = self._run(f"cat <<'EOF' | kubectl apply -f -\n{manifest}\nEOF")
+            if apply_result.returncode != 0:
+                return {"status": "failed", "duration_ms": None, "metrics": {},
+                        "error": f"apply failed: {apply_result.stdout}"}
+
             phase = self._poll(pod_name)
 
             if phase == "timeout":

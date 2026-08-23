@@ -4,18 +4,22 @@ from tests.test_spark_conf import _cv
 
 class FakeRunner:
     """Simula ssh→kubectl: guarda comandos, devolve saídas roteirizadas por etapa."""
-    def __init__(self, phases, logs):
+    def __init__(self, phases, logs, apply_returncode=0):
         self.phases = list(phases); self.logs = logs; self.calls = []
+        self.apply_returncode = apply_returncode
     def __call__(self, cmd, **kw):
         import types
         self.calls.append(cmd)
         joined = " ".join(cmd)
         out = ""
-        if "apply" in joined: out = "pod/advisor-r1 created"
+        rc = 0
+        if "apply" in joined:
+            out = "pod/advisor-r1 created"
+            rc = self.apply_returncode
         elif "jsonpath" in joined or "get pod" in joined: out = self.phases.pop(0)
         elif "logs" in joined: out = self.logs
         elif "delete" in joined: out = "deleted"
-        return types.SimpleNamespace(stdout=out, returncode=0)
+        return types.SimpleNamespace(stdout=out, returncode=rc)
 
 def test_submit_success_reads_result():
     logs = "some spark noise\nADVISOR_RESULT " + json.dumps(
@@ -36,3 +40,13 @@ def test_pod_failed_is_failed():
     s = SparkSubmitter(ssh_cmd=["ssh","host"], image="img", runner=r, poll_interval_s=0)
     res = s.submit(_cv(), "sf1", "q03", "r3")
     assert res["status"] in ("failed","oom")
+
+
+def test_apply_failure_returns_failed_without_polling():
+    r = FakeRunner(phases=["Pending", "Running", "Succeeded"], logs="irrelevant", apply_returncode=1)
+    s = SparkSubmitter(ssh_cmd=["ssh", "host"], image="img", runner=r, poll_interval_s=0)
+    res = s.submit(_cv(), "sf1", "q03", "r4")
+    assert res["status"] == "failed"
+    assert "apply failed" in res["error"]
+    # nao deve ter consumido as fases de polling (get pod nunca chamado)
+    assert r.phases == ["Pending", "Running", "Succeeded"]
