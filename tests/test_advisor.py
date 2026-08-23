@@ -1,7 +1,7 @@
 import json, pytest
-from advisor_loop.advisor.advisor import Advisor, _SUBMIT
+from advisor_loop.advisor.advisor import Advisor, _SUBMIT, render_history
 from advisor_loop.advisor.provider import LLMResponse
-from advisor_loop.episode import Episode
+from advisor_loop.episode import ConfigVector, Episode, Outcome, QueryResult
 from advisor_loop.journal import Journal
 from advisor_loop.probes.budget import ProbeBudgetExceeded
 from advisor_loop.probes.duckdb_probe import ProbeQueryError
@@ -226,3 +226,28 @@ def test_advise_handles_hallucinated_tool_name_and_still_submits(tmp_path):
     assert len(probe_events) == 1
     assert probe_events[0]["tool"] == "frobnicate"
     assert "error" in probe_events[0]
+
+
+def test_render_history_lines():
+    cv = ConfigVector(**CFG)
+    hist = [
+        (cv, Outcome(status="completed",
+                      per_query={"q": QueryResult(status="success", duration_ms=4300.0)})),
+        (ConfigVector(**{**CFG, "executor_instances": 12}), Outcome(status="oom")),
+    ]
+    s = render_history(hist)
+    assert "4300" in s and "oom" in s and "12w" in s
+
+
+def test_history_injected_into_context(tmp_path):
+    j = Journal(tmp_path / "j.jsonl")
+    client = FakeClient([_submit_call()])
+    adv = Advisor(client, j)
+    ep = Episode(workload="w", dataset="sf1", queries=["q03"], provider="m")
+    cv = ConfigVector(**CFG)
+    adv.advise(ep, "ctx", None, [], history=[
+        (cv, Outcome(status="completed",
+                      per_query={"q03": QueryResult(status="success", duration_ms=4300.0)})),
+    ])
+    user_msg = client.last_kwargs["messages"][1]["content"]
+    assert "4300" in user_msg

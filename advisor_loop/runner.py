@@ -20,6 +20,8 @@ class Deps:
 def run_campaign(campaign_path: str | Path, deps: Deps) -> dict:
     camp = yaml.safe_load(Path(campaign_path).read_text())
     adv = Advisor(deps.client, deps.journal)
+    if camp.get("mode") == "optimize":
+        return _run_optimize_campaign(camp, deps, adv)
     ran = skipped = 0
     cost = 0.0
     for dataset in camp["datasets"]:
@@ -75,6 +77,33 @@ def run_campaign(campaign_path: str | Path, deps: Deps) -> dict:
                     deps.memory.distill(ep, rec, out)
                 ran += 1
                 cost += out.cost_usd
+    return {"episodes_run": ran, "episodes_skipped": skipped, "cost_usd": cost}
+
+
+def _run_optimize_campaign(camp: dict, deps: Deps, adv: Advisor) -> dict:
+    """Modo optimize (spec §2.5): por (dataset,query) chama o laco fechado
+    optimize() em vez do ciclo single-shot. Memoria e sempre usada dentro do
+    laco (optimize() ja retrieve/distill incondicionalmente) - nao ha gate de
+    camp["memory"] aqui, ao contrario do fluxo single-shot acima."""
+    from advisor_loop.loop import optimize          # import local: evita ciclo runner<->loop
+    ran = skipped = 0
+    cost = 0.0
+    for dataset in camp["datasets"]:
+        for query in camp["queries"]:
+            ep = Episode(workload=camp["name"], dataset=dataset, queries=[query],
+                         objective=camp.get("objective", "min_time"),
+                         level=camp["level"], provider=camp["provider"])
+            ek = episode_key(camp["name"], dataset, query, 1, ep.provider, ep.level)
+            if deps.journal.has(ek):        # config-independent: nunca re-executa no resume
+                skipped += 1
+                continue
+            result = optimize(ep, deps, adv, max_iters=camp.get("max_iters", 4),
+                              patience=camp.get("patience", 2))
+            deps.journal.append({"kind": "opt_result", "task_key": ek,
+                                 "query": query, "dataset": dataset,
+                                 "provider": ep.provider, "level": ep.level,
+                                 **result})
+            ran += 1
     return {"episodes_run": ran, "episodes_skipped": skipped, "cost_usd": cost}
 
 

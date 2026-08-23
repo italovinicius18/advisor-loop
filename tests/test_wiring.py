@@ -85,6 +85,20 @@ def test_build_deps_probe_service_url_selects_remote_probe(tmp_path, monkeypatch
     assert probe.list_tables() == ["store_sales"]
 
 
+def test_wiring_selects_spark_k8s(tmp_path, monkeypatch):
+    """spark_k8s backend campaigns read a top-level spark: block (ssh_cmd, image)
+    from datasets.yaml and wire SparkK8sBackend(SparkSubmitter(...))."""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    root = _root(tmp_path)
+    (root / "datasets.yaml").write_text(yaml.safe_dump({
+        "spark": {"ssh_cmd": ["ssh", "host"], "image": "ghcr.io/x/spark-advisor:t"},
+        "sf1": {}}))
+    camp = _campaign(tmp_path, "sparkcamp", backend="spark_k8s", mode="optimize")
+    deps = build_deps(camp, root=root)
+    from advisor_loop.backends.spark_k8s import SparkK8sBackend
+    assert isinstance(deps.backend, SparkK8sBackend)
+
+
 def test_build_deps_without_datasets_yaml_keeps_probe_factory_none(tmp_path, monkeypatch):
     """Backward-compat: no datasets.yaml -> probe_factory returns None (L0 behavior)."""
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")

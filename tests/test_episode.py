@@ -129,3 +129,12 @@ def test_episode_key_includes_provider_and_level():
     # identical-everything -> same key (still allows correct resume-skip)
     assert episode_key("w", "sf100", "q1", 1, "deepseek", "L0") == \
            episode_key("w", "sf100", "q1", 1, "deepseek", "L0")
+
+def test_queryresult_carries_metrics():
+    qr = QueryResult(status="success", duration_ms=1200.0,
+                     metrics={"input_bytes": 100, "read_throughput_mbps": 5.0})
+    assert qr.metrics["input_bytes"] == 100
+    assert QueryResult(status="failed").metrics == {}   # default vazio
+
+def test_outcome_status_oom_allowed():
+    Outcome(status="oom")   # não levanta
