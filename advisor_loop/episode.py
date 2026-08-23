@@ -31,13 +31,14 @@ def episode_key(workload: str, dataset: str, query: str, try_n: int,
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 class QueryResult(BaseModel):
-    status: Literal["success", "failed", "timeout", "killed"]
+    status: Literal["success", "failed", "timeout", "killed", "oom"]
     duration_ms: float | None = None
     error: str | None = None
+    metrics: dict = Field(default_factory=dict)
 
 class Outcome(BaseModel):
     status: Literal["completed", "driver_crash", "aborted_by_supervisor",
-                    "invalid_recommendation", "infeasible", "error", "proposed"]
+                    "invalid_recommendation", "infeasible", "error", "proposed", "oom"]
     per_query: dict[str, QueryResult] = {}
     wall_clock_s: float = 0.0
     cost_usd: float = 0.0
