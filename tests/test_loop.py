@@ -44,6 +44,26 @@ def test_stops_on_max_iters(tmp_path):
     r=optimize(ep, _deps(tmp_path,be), ScriptAdvisor([]), max_iters=3, patience=2)
     assert len(r["iterations"])==3 and r["best_duration_ms"]==4800
 
+class MetricsBackend:
+    """Backend que devolve métricas reais por query (como o SparkK8sBackend)."""
+    def execute(self, ep, rec):
+        return Outcome(status="completed", wall_clock_s=20,
+                       per_query={ep.queries[0]: QueryResult(
+                           status="success", duration_ms=20000.0,
+                           metrics={"shuffle_write_bytes": 116788, "gc_time_ms": 3776})})
+
+
+def test_iteration_record_and_journal_include_metrics(tmp_path):
+    import json
+    ep = Episode(workload="w", dataset="sf1", queries=["q03"], provider="m")
+    deps = _deps(tmp_path, MetricsBackend())
+    r = optimize(ep, deps, ScriptAdvisor([]), max_iters=1, patience=2)
+    assert r["iterations"][0]["metrics"]["shuffle_write_bytes"] == 116788
+    ev = [json.loads(l) for l in open(tmp_path / "j.jsonl")]
+    oi = [e for e in ev if e.get("kind") == "opt_iter"][0]
+    assert oi["metrics"]["gc_time_ms"] == 3776 and oi["duration_ms"] == 20000.0
+
+
 def test_oom_does_not_crash(tmp_path):
     ep=Episode(workload="w",dataset="sf1",queries=["q03"],provider="m")
     be=ScriptBackend([None, 4000, 4100, 4200])
