@@ -49,3 +49,30 @@ def test_oom_does_not_crash(tmp_path):
     be=ScriptBackend([None, 4000, 4100, 4200])
     r=optimize(ep, _deps(tmp_path,be), ScriptAdvisor([]), max_iters=4, patience=2)
     assert r["best_duration_ms"]==4000
+
+
+class OneBadThenGoodAdvisor:
+    """1a iteracao: config fora do cluster (Guardian rejeita); demais: config valida."""
+    def __init__(self):
+        self.i = 0
+    def advise(self, ep, ctx, probe, mems, history=None):
+        self.i += 1
+        if self.i == 1:
+            # 20 cores x 20 instances excede total_cores(100) e max_pods(20) do CLUSTER
+            cfg = ConfigVector(**{**CFG, "executor_cores": 20, "executor_instances": 20})
+        else:
+            cfg = ConfigVector(**CFG)
+        return Recommendation(rationale="", config=cfg)
+
+
+def test_invalid_recommendation_does_not_crash_and_continues(tmp_path):
+    """Guardian rejeita a 1a recomendacao (fora do cluster): o laco nao deve
+    quebrar, deve registrar a iteracao como invalid_recommendation e seguir
+    ate uma iteracao valida (Task 8 coverage gap)."""
+    ep = Episode(workload="w", dataset="sf1", queries=["q03"], provider="m")
+    be = ScriptBackend([4000, 3000])
+    r = optimize(ep, _deps(tmp_path, be), OneBadThenGoodAdvisor(), max_iters=3, patience=2)
+    assert r["iterations"][0]["status"] == "invalid_recommendation"
+    assert r["iterations"][0]["duration_ms"] is None
+    assert len(r["iterations"]) == 3
+    assert r["best_duration_ms"] == 3000

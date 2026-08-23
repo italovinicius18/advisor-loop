@@ -3,6 +3,8 @@ import yaml
 from advisor_loop.advisor.provider import OpenRouterClient
 from advisor_loop.backends.proposal import ProposalBackend
 from advisor_loop.backends.replay import ReplayBackend
+from advisor_loop.backends.spark_k8s import SparkK8sBackend
+from advisor_loop.backends.spark_submitter import SparkSubmitter
 from advisor_loop.guardian import Guardian
 from advisor_loop.journal import Journal
 from advisor_loop.knowledge.pack import KnowledgePack
@@ -25,7 +27,9 @@ def build_deps(campaign_path: Path, root: Path = Path(".")) -> Deps:
         ds_config = yaml.safe_load(ds_file.read_text()) or {}
     s3_config = ds_config.get("s3")
     probe_service = ds_config.get("probe_service")
-    tables_by_dataset = {k: v for k, v in ds_config.items() if k not in ("s3", "probe_service")}
+    spark_config = ds_config.get("spark")
+    tables_by_dataset = {k: v for k, v in ds_config.items()
+                        if k not in ("s3", "probe_service", "spark")}
 
     def probe_factory(ep):
         tables = tables_by_dataset.get(ep.dataset)
@@ -39,8 +43,13 @@ def build_deps(campaign_path: Path, root: Path = Path(".")) -> Deps:
             return BudgetedProbe(RemoteDuckDBProbe(probe_service["url"], tables))
         return BudgetedProbe(DuckDBProbe(tables, s3_config=s3_config))
 
-    backend = (ProposalBackend() if camp.get("backend") == "proposal"
-               else ReplayBackend(root / "data" / "reference.parquet"))
+    if camp.get("backend") == "spark_k8s":
+        backend = SparkK8sBackend(SparkSubmitter(ssh_cmd=spark_config["ssh_cmd"],
+                                                  image=spark_config["image"]))
+    elif camp.get("backend") == "proposal":
+        backend = ProposalBackend()
+    else:
+        backend = ReplayBackend(root / "data" / "reference.parquet")
 
     return Deps(client=OpenRouterClient(), journal=Journal(ev / "journal.jsonl"),
                 pack=pack, guardian=Guardian(pack.cluster),
