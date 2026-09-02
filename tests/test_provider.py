@@ -1,5 +1,6 @@
 import httpx
 import json
+import pytest
 from advisor_loop.advisor.provider import OpenRouterClient
 
 
@@ -65,3 +66,35 @@ def test_chat_omits_max_tokens_by_default():
     c = OpenRouterClient(api_key="k", transport=httpx.MockTransport(handler))
     c.chat("m", [{"role": "user", "content": "oi"}])
     assert "max_tokens" not in captured
+
+
+def test_chat_retries_transient_network_error():
+    """A dropped connection (RemoteProtocolError) must be retried, not fatal.
+
+    The OpenRouter sweep died mid-run because one incomplete chunked read
+    killed the whole batch. chat() must survive transient blips."""
+    calls = {"n": 0}
+    ok = {"choices": [{"message": {"role": "assistant"}}], "usage": {"cost": 0.0}}
+
+    def handler(request):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise httpx.RemoteProtocolError("peer closed connection")
+        return httpx.Response(200, json=ok)
+
+    c = OpenRouterClient(api_key="k", transport=httpx.MockTransport(handler),
+                         max_retries=5, sleep=lambda _s: None)
+    r = c.chat("m", [{"role": "user", "content": "oi"}])
+    assert calls["n"] == 3          # failed twice, succeeded on the third
+    assert r.cost_usd == 0.0
+
+
+def test_chat_gives_up_after_max_retries():
+    """After exhausting retries the transient error propagates (honest failure)."""
+    def handler(request):
+        raise httpx.RemoteProtocolError("peer closed connection")
+
+    c = OpenRouterClient(api_key="k", transport=httpx.MockTransport(handler),
+                         max_retries=3, sleep=lambda _s: None)
+    with pytest.raises(httpx.RemoteProtocolError):
+        c.chat("m", [{"role": "user", "content": "oi"}])
