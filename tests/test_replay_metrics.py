@@ -33,6 +33,15 @@ def test_metrics_surfaced_when_columns_present(tmp_path):
     assert "num_joins" not in qr.metrics       # coluna ausente => não aparece
 
 
+def test_emit_metrics_false_suppresses_telemetry(tmp_path):
+    # A3t: mesmo com telemetria no parquet, metrics fica vazio.
+    rb = ReplayBackend(_ref_with_metrics(tmp_path), emit_metrics=False)
+    ep = Episode(workload="w", dataset="sf100", queries=["q1"], provider="m")
+    out = rb.execute(ep, _rec(4, 14, 4))
+    assert out.per_query["q1"].duration_ms == 1200.0
+    assert out.per_query["q1"].metrics == {}
+
+
 def test_metrics_empty_when_no_telemetry_columns(tmp_path):
     p = tmp_path / "bare.parquet"
     duckdb.sql("""SELECT * FROM (VALUES ('sf100','q1',4,14,4,'success',900.0))

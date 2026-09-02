@@ -1,0 +1,87 @@
+"""Braços LLM do estudo de regret offline (A3/A4) — via API OpenRouter.
+
+CUSTA $: cada workload dispara chamadas de API. Use --limit para smoke.
+
+    python -m advisor_loop.studies.run_llm REFERENCE.parquet --model MODEL \
+        [--arm a3m|a3t|a4] [--limit N] [--max-iters K] [--out results.json]
+
+Braços (mesmo Advisor LLM real; muda o que ele vê):
+  a3m — online, histórico COM telemetria (shuffle/gc/...)   [ablação: +telemetria]
+  a3t — online, histórico SÓ-tempo (ReplayBackend emit_metrics=False)
+  a4  — zero-shot: uma única proposta (max_iters=1, sem histórico)
+
+Reusa a mesma malha offline do run_offline (ReplayBackend, regret vs oráculo);
+só troca o advisor por Advisor(client) e compartilha o journal p/ somar custo.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+
+from advisor_loop.advisor.advisor import Advisor
+from advisor_loop.advisor.provider import OpenRouterClient
+from advisor_loop.backends.replay import ReplayBackend
+from advisor_loop.studies.advisors import config_space
+from advisor_loop.studies.regret import (
+    AdvisorSpec, _CostJournal, _StudyPack, run_advisor, aggregate, workloads,
+)
+
+
+def _menu(reference) -> list[tuple[int, int, int]]:
+    """As triplas (cores, mem_gb, instances) da grade — o menu discreto que o
+    LLM DEVE respeitar para que a proposta case com uma célula medida."""
+    return [(c.executor_cores, c.executor_memory_gb, c.executor_instances)
+            for c in config_space(reference)]
+
+
+def build_arm(arm: str, reference, client, max_iters: int):
+    """Retorna (spec, backend, journal) para o braço pedido."""
+    journal = _CostJournal()
+    advisor = Advisor(client, journal)
+    if arm == "a3m":
+        backend = ReplayBackend(reference, emit_metrics=True)
+        return AdvisorSpec("A3m-llm-online+telemetry", advisor, max_iters=max_iters), backend, journal
+    if arm == "a3t":
+        backend = ReplayBackend(reference, emit_metrics=False)
+        return AdvisorSpec("A3t-llm-online-timeonly", advisor, max_iters=max_iters), backend, journal
+    if arm == "a4":
+        backend = ReplayBackend(reference, emit_metrics=True)
+        return AdvisorSpec("A4-llm-zeroshot", advisor, max_iters=1), backend, journal
+    raise SystemExit(f"arm inválido: {arm} (use a3m|a3t|a4)")
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(prog="run_llm")
+    ap.add_argument("reference")
+    ap.add_argument("--model", required=True,
+                    help="ex.: deepseek/deepseek-v4-flash-0731")
+    ap.add_argument("--arm", default="a3m", choices=["a3m", "a3t", "a4"])
+    ap.add_argument("--limit", type=int, default=0, help="nº de workloads (0=todos)")
+    ap.add_argument("--max-iters", type=int, default=4)
+    ap.add_argument("--out")
+    args = ap.parse_args(argv)
+
+    client = OpenRouterClient()
+    spec, backend, journal = build_arm(args.arm, args.reference, client, args.max_iters)
+    spec.provider = args.model
+
+    wls = workloads(args.reference)
+    if args.limit:
+        wls = wls[:args.limit]
+
+    pack = _StudyPack(menu=_menu(args.reference))
+    print(f"braço={spec.name} model={args.model} workloads={len(wls)} "
+          f"max_iters={spec.max_iters} menu={len(pack.menu)} configs")
+    run = run_advisor(spec, backend, wls, journal=journal, pack=pack)
+    agg = aggregate(run)
+    print(json.dumps(agg, indent=2))
+    if args.out:
+        with open(args.out, "w") as fh:
+            json.dump({spec.name: {"agg": agg, "records": run["records"]}}, fh, indent=2)
+        print(f"resultados: {args.out}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

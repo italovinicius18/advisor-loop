@@ -22,11 +22,39 @@ from advisor_loop.loop import optimize
 
 
 # --- deps mínimos para dirigir loop.optimize offline ---------------------
-class _NullPack:
-    hash = "null"
+class _StudyPack:
+    """Contexto justo para o advisor: identifica o workload e o espaço de busca,
+    SEM revelar a grade de resultados (isso é o que o loop/histórico realimenta).
+
+    O espaço de configuração é DISCRETO: o menu real de perfis de executor x
+    contagem de workers deployáveis (como no LakeHelm). Quando ``menu`` é dado
+    (triplas (cores, mem_gb, instances)), o advisor DEVE escolher uma delas —
+    caso contrário a proposta não casa com nenhuma célula medida da grade.
+    Inofensivo para baselines não-LLM (ignoram o context)."""
+    hash = "study"
+
+    def __init__(self, menu: list[tuple[int, int, int]] | None = None):
+        self.menu = menu
 
     def render(self, ep):
-        return ""
+        base = (
+            f"Workload: query {ep.queries[0]} do TPC-H no dataset {ep.dataset} "
+            f"(o sufixo indica o scale factor em GB). Objetivo: minimizar o tempo "
+            f"de execução.")
+        if self.menu:
+            opts = "; ".join(f"({c},{m},{i})" for c, m, i in self.menu)
+            return (
+                f"{base}\nEscolha EXATAMENTE UM perfil da lista abaixo, no formato "
+                f"(executor_cores, executor_memory_gb, executor_instances) — não "
+                f"invente valores fora da lista:\n{opts}\nOs demais knobs "
+                f"(driver_memory_gb, shuffle_partitions, advisory_partition_mb, "
+                f"aqe_enabled, broadcast_threshold_mb) você ajusta livremente. "
+                f"Finalize via submit_recommendation.")
+        return (
+            f"{base}\nVocê escolhe a configuração de execução Spark: executor_cores "
+            f"(2-24), executor_memory_gb (4-96), executor_instances (1-20), "
+            f"driver_memory_gb, shuffle_partitions, advisory_partition_mb, "
+            f"aqe_enabled, broadcast_threshold_mb. Finalize via submit_recommendation.")
 
 
 class _NullMemory:
@@ -62,7 +90,7 @@ class _CostJournal:
 class _Deps:
     backend: object
     journal: object
-    pack: object = field(default_factory=_NullPack)
+    pack: object = field(default_factory=_StudyPack)
     guardian: object = field(default_factory=_PassGuardian)
     memory: object = field(default_factory=_NullMemory)
     probe_factory: object = field(default=lambda ep: None)
@@ -96,9 +124,12 @@ def _p90(vals: list[float]) -> float | None:
 
 
 def run_advisor(spec: AdvisorSpec, backend: ReplayBackend,
-                wls: list[tuple[str, str]]) -> dict:
-    journal = _CostJournal()
-    deps = _Deps(backend=backend, journal=journal)
+                wls: list[tuple[str, str]], journal=None, pack=None) -> dict:
+    # journal compartilhado com o Advisor LLM => captura o custo real das
+    # chamadas de API (baselines não-LLM passam o default de custo zero).
+    # pack: contexto do advisor (LLM recebe o menu discreto de configs).
+    journal = journal if journal is not None else _CostJournal()
+    deps = _Deps(backend=backend, journal=journal, pack=pack or _StudyPack())
     records = []
     for dataset, query in wls:
         ep = Episode(workload="regret-study", dataset=dataset, queries=[query],

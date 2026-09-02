@@ -13,11 +13,13 @@ _METRIC_COLS = [
 
 
 class ReplayBackend:
-    def __init__(self, reference: str | Path):
+    def __init__(self, reference: str | Path, emit_metrics: bool = True):
+        # emit_metrics=False zera QueryResult.metrics mesmo com telemetria no
+        # parquet -> serve o braço A3t (histórico só-tempo) da ablação.
         self.con = duckdb.connect()
         self.con.sql(f"CREATE VIEW ref AS SELECT * FROM read_parquet('{reference}')")
         cols = {r[0] for r in self.con.execute("DESCRIBE ref").fetchall()}
-        self._metric_cols = [c for c in _METRIC_COLS if c in cols]
+        self._metric_cols = [c for c in _METRIC_COLS if c in cols] if emit_metrics else []
 
     def execute(self, ep: Episode, rec: Recommendation) -> Outcome:
         c = rec.config
