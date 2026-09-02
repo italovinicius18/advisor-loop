@@ -1,0 +1,70 @@
+{
+  "model": "deepseek/deepseek-v4-flash-0731",
+  "reference": "experiments/06-tpch-matrix/reference.parquet (TPC-H, SF100-750, 88 workloads w/ oracle)",
+  "llm_settings": {
+    "tool_choice": "required",
+    "reasoning": "disabled",
+    "max_tokens": 1024,
+    "max_iters": {
+      "a3m": 4,
+      "a3t": 4,
+      "a4": 1
+    }
+  },
+  "arms": {
+    "A0-fixed": {
+      "n_workloads": 88,
+      "feasibility_hit_rate": 1.0,
+      "regret_mean": 0.15251314360308688,
+      "regret_median": 0.12040866722957633,
+      "regret_p90": 0.37042793108277605,
+      "cost_usd": 0.0,
+      "n_llm_calls": 0
+    },
+    "A1-random": {
+      "n_workloads": 88,
+      "feasibility_hit_rate": 0.9886363636363636,
+      "regret_mean": 0.10507852265584006,
+      "regret_median": 0.061699812751605965,
+      "regret_p90": 0.2648501697102639,
+      "cost_usd": 0.0,
+      "n_llm_calls": 0
+    },
+    "A2-surrogate": {
+      "n_workloads": 88,
+      "feasibility_hit_rate": 0.45454545454545453,
+      "regret_mean": 0.5677795948370029,
+      "regret_median": 0.3974247971649435,
+      "regret_p90": 1.1040044145029768,
+      "cost_usd": 0.0,
+      "n_llm_calls": 0
+    },
+    "A4-llm-zeroshot": {
+      "n_workloads": 88,
+      "feasibility_hit_rate": 0.9090909090909091,
+      "regret_mean": 0.22330181306151914,
+      "regret_median": 0.1737079671507713,
+      "regret_p90": 0.49276224695451204,
+      "cost_usd": 0.02861013099999998,
+      "n_llm_calls": 208
+    },
+    "A3t-llm-online-timeonly": {
+      "n_workloads": 88,
+      "feasibility_hit_rate": 0.9090909090909091,
+      "regret_mean": 0.18495088050297592,
+      "regret_median": 0.1510381704919822,
+      "regret_p90": 0.4682825093466937,
+      "cost_usd": 0.07180706999999997,
+      "n_llm_calls": 680
+    },
+    "A3m-llm-online+telemetry": {
+      "n_workloads": 88,
+      "feasibility_hit_rate": 0.9090909090909091,
+      "regret_mean": 0.1509719396607656,
+      "regret_median": 0.11913546186382418,
+      "regret_p90": 0.32956426327337324,
+      "cost_usd": 0.09467958700000005,
+      "n_llm_calls": 718
+    }
+  }
+}
