@@ -88,9 +88,15 @@ def render_history(history: list[tuple[ConfigVector, Outcome]]) -> str:
 
 class Advisor:
     def __init__(self, client, journal: Journal, max_rounds: int = 12,
-                 max_tokens: int | None = None):
+                 max_tokens: int | None = None,
+                 tool_choice: str | dict | None = None,
+                 reasoning: dict | None = None):
         self.client, self.journal, self.max_rounds = client, journal, max_rounds
         self.max_tokens = max_tokens
+        # tool_choice/reasoning: passados a cada chat() -> forçam tool call e/ou
+        # desligam reasoning para manter o modelo rápido e no protocolo.
+        self.tool_choice = tool_choice
+        self.reasoning = reasoning
 
     def advise(self, ep: Episode, context: str, probe, memories: list[str],
                history: list[tuple[ConfigVector, Outcome]] = []) -> Recommendation:
@@ -131,7 +137,9 @@ class Advisor:
             {"role": "user", "content": user_content},
         ]
         for _ in range(self.max_rounds):
-            r = self.client.chat(ep.provider, messages, tools=tools, max_tokens=self.max_tokens)
+            r = self.client.chat(ep.provider, messages, tools=tools,
+                                 max_tokens=self.max_tokens,
+                                 tool_choice=self.tool_choice, reasoning=self.reasoning)
             self.journal.append({"kind": "llm_call", "model": ep.provider,
                                  "cost_usd": r.cost_usd, "usage": r.usage})
             if not r.tool_calls:

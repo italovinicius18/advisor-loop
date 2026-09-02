@@ -35,10 +35,22 @@ def _menu(reference) -> list[tuple[int, int, int]]:
             for c in config_space(reference)]
 
 
+# Cap de saída por chamada: a rationale é limitada a 120 palavras pelo system
+# prompt; sem cap, um modelo de raciocínio pode gerar respostas longas que
+# estagnam sobre streaming instável (causa raiz do travamento do 1º sweep).
+_MAX_TOKENS = 1024
+
+
 def build_arm(arm: str, reference, client, max_iters: int):
-    """Retorna (spec, backend, journal) para o braço pedido."""
+    """Retorna (spec, backend, journal) para o braço pedido.
+
+    reasoning desligado + tool_choice="required": o modelo "flash" DEVE emitir
+    uma tool call (não texto livre) e sem trace de raciocínio -> ~12s/chamada em
+    vez de ~90s + resposta sem tool call (que estagnava a varredura em loop de
+    12 rounds). É o modo "flash" fiel: rápido, direto ao submit_recommendation."""
     journal = _CostJournal()
-    advisor = Advisor(client, journal)
+    advisor = Advisor(client, journal, max_tokens=_MAX_TOKENS,
+                      tool_choice="required", reasoning={"enabled": False})
     if arm == "a3m":
         backend = ReplayBackend(reference, emit_metrics=True)
         return AdvisorSpec("A3m-llm-online+telemetry", advisor, max_iters=max_iters), backend, journal
@@ -62,7 +74,9 @@ def main(argv=None) -> int:
     ap.add_argument("--out")
     args = ap.parse_args(argv)
 
-    client = OpenRouterClient()
+    # timeout curto por request: um call que estagna falha rápido e é
+    # re-tentado (backoff) em vez de bloquear ~120s -> varredura não trava.
+    client = OpenRouterClient(timeout=60)
     spec, backend, journal = build_arm(args.arm, args.reference, client, args.max_iters)
     spec.provider = args.model
 
@@ -72,14 +86,34 @@ def main(argv=None) -> int:
 
     pack = _StudyPack(menu=_menu(args.reference))
     print(f"braço={spec.name} model={args.model} workloads={len(wls)} "
-          f"max_iters={spec.max_iters} menu={len(pack.menu)} configs")
-    run = run_advisor(spec, backend, wls, journal=journal, pack=pack)
+          f"max_iters={spec.max_iters} menu={len(pack.menu)} configs "
+          f"max_tokens={_MAX_TOKENS}", flush=True)
+
+    run_records: list = []
+
+    def _progress(idx, total, rec, cost):
+        run_records.append(rec)
+        r = (f"{rec['regret']:.3f}" if rec["regret"] is not None else "MISS")
+        err = f" ERR={rec['error']}" if rec.get("error") else ""
+        print(f"[{idx}/{total}] {rec['dataset']}/{rec['query']} regret={r} "
+              f"iters={rec['iters']} cost=${cost:.4f}{err}", flush=True)
+        # persistência incremental: se o processo morrer no meio, os workloads
+        # já feitos ficam salvos (varredura longa sobre API instável).
+        if args.out:
+            partial = {"records": run_records, "cost_usd": journal.cost_usd,
+                       "n_llm_calls": journal.n_llm}
+            with open(args.out, "w") as fh:
+                json.dump({spec.name: {"agg": aggregate(partial),
+                          "records": run_records}}, fh, indent=2)
+
+    run = run_advisor(spec, backend, wls, journal=journal, pack=pack,
+                      progress=_progress)
     agg = aggregate(run)
-    print(json.dumps(agg, indent=2))
+    print(json.dumps(agg, indent=2), flush=True)
     if args.out:
         with open(args.out, "w") as fh:
             json.dump({spec.name: {"agg": agg, "records": run["records"]}}, fh, indent=2)
-        print(f"resultados: {args.out}")
+        print(f"resultados: {args.out}", flush=True)
     return 0
 
 

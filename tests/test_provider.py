@@ -68,6 +68,26 @@ def test_chat_omits_max_tokens_by_default():
     assert "max_tokens" not in captured
 
 
+def test_chat_forwards_tool_choice_and_reasoning():
+    """tool_choice + reasoning must reach the payload when set (keeps a flash
+    model fast and on-protocol); absent by default to preserve old behavior."""
+    captured = {}
+
+    def handler(request):
+        captured.update(json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {"role": "assistant"}}],
+                                          "usage": {"cost": 0.0}})
+
+    c = OpenRouterClient(api_key="k", transport=httpx.MockTransport(handler))
+    c.chat("m", [{"role": "user", "content": "oi"}])
+    assert "tool_choice" not in captured and "reasoning" not in captured
+
+    c.chat("m", [{"role": "user", "content": "oi"}],
+           tool_choice="required", reasoning={"enabled": False})
+    assert captured["tool_choice"] == "required"
+    assert captured["reasoning"] == {"enabled": False}
+
+
 def test_chat_retries_transient_network_error():
     """A dropped connection (RemoteProtocolError) must be retried, not fatal.
 

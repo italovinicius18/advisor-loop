@@ -14,9 +14,11 @@ class FakeClient:
     def __init__(self, scripted):
         self.scripted = list(scripted)
         self.last_kwargs = None
-    def chat(self, model, messages, tools=None, temperature=0.2, max_tokens=None):
+    def chat(self, model, messages, tools=None, temperature=0.2, max_tokens=None,
+             tool_choice=None, reasoning=None):
         self.last_kwargs = {"model": model, "messages": messages, "tools": tools,
-                             "temperature": temperature, "max_tokens": max_tokens}
+                             "temperature": temperature, "max_tokens": max_tokens,
+                             "tool_choice": tool_choice, "reasoning": reasoning}
         return self.scripted.pop(0)
 
 class FakeProbe:

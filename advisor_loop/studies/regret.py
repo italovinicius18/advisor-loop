@@ -124,25 +124,41 @@ def _p90(vals: list[float]) -> float | None:
 
 
 def run_advisor(spec: AdvisorSpec, backend: ReplayBackend,
-                wls: list[tuple[str, str]], journal=None, pack=None) -> dict:
+                wls: list[tuple[str, str]], journal=None, pack=None,
+                progress=None) -> dict:
     # journal compartilhado com o Advisor LLM => captura o custo real das
     # chamadas de API (baselines não-LLM passam o default de custo zero).
     # pack: contexto do advisor (LLM recebe o menu discreto de configs).
+    # progress: callback(idx, total, record, cost_usd) chamado após cada
+    # workload -> dá visibilidade e persistência incremental em runs longos.
     journal = journal if journal is not None else _CostJournal()
     deps = _Deps(backend=backend, journal=journal, pack=pack or _StudyPack())
     records = []
-    for dataset, query in wls:
+    total = len(wls)
+    for idx, (dataset, query) in enumerate(wls, start=1):
         ep = Episode(workload="regret-study", dataset=dataset, queries=[query],
                      provider=spec.provider)
-        result = optimize(ep, deps, spec.advisor,
-                          max_iters=spec.max_iters, patience=spec.patience)
-        best = result["best_duration_ms"]
+        # Um workload que estoure (ex.: o LLM nunca chama submit_recommendation,
+        # ou a API falha após esgotar retries) NÃO deve derrubar a varredura
+        # inteira: registra como não-hit e segue -> falha honesta e localizada.
+        error = None
+        try:
+            result = optimize(ep, deps, spec.advisor,
+                              max_iters=spec.max_iters, patience=spec.patience)
+            best = result["best_duration_ms"]
+            iters = len(result["iterations"])
+        except Exception as e:  # noqa: BLE001 - resiliência de varredura
+            best, iters, error = None, 0, f"{type(e).__name__}: {e}"
         orc = backend.oracle(dataset, query)
         regret = (best / orc - 1.0) if (best is not None and orc) else None
-        records.append({"dataset": dataset, "query": query,
-                        "best_ms": best, "oracle_ms": orc, "regret": regret,
-                        "hit": best is not None,
-                        "iters": len(result["iterations"])})
+        rec = {"dataset": dataset, "query": query,
+               "best_ms": best, "oracle_ms": orc, "regret": regret,
+               "hit": best is not None, "iters": iters}
+        if error:
+            rec["error"] = error
+        records.append(rec)
+        if progress is not None:
+            progress(idx, total, rec, journal.cost_usd)
     return {"records": records, "cost_usd": journal.cost_usd,
             "n_llm_calls": journal.n_llm}
 

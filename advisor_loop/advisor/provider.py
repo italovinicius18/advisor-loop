@@ -35,6 +35,7 @@ class OpenRouterClient:
         transport: httpx.BaseTransport | None = None,
         max_retries: int = 4,
         sleep=time.sleep,
+        timeout: float = 120,
     ):
         """Initialize OpenRouter client.
 
@@ -44,6 +45,8 @@ class OpenRouterClient:
             transport: Custom httpx transport (for testing)
             max_retries: attempts on transient network faults before giving up
             sleep: sleep function (injectable so tests don't wait)
+            timeout: per-request timeout in seconds (a stalled call fails fast
+                and is retried instead of blocking the whole sweep)
         """
         load_dotenv()
         self.api_key = api_key or os.environ["OPENROUTER_API_KEY"]
@@ -51,7 +54,7 @@ class OpenRouterClient:
         self._sleep = sleep
         self.http = httpx.Client(
             base_url=base_url,
-            timeout=120,
+            timeout=timeout,
             transport=transport,
             headers={"Authorization": f"Bearer {self.api_key}"},
         )
@@ -63,6 +66,8 @@ class OpenRouterClient:
         tools: list[dict] | None = None,
         temperature: float = 0.2,
         max_tokens: int | None = None,
+        tool_choice: str | dict | None = None,
+        reasoning: dict | None = None,
     ) -> LLMResponse:
         """Send a chat completion request to OpenRouter.
 
@@ -86,6 +91,14 @@ class OpenRouterClient:
             payload["tools"] = tools
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
+        # tool_choice="required" forces a tool call instead of a free-text reply;
+        # reasoning={"enabled": False} disables reasoning-token streaming. Both
+        # keep a "flash" model fast and on-protocol (a reasoning-heavy reply took
+        # ~90s and never called the tool, stalling the whole sweep).
+        if tool_choice is not None:
+            payload["tool_choice"] = tool_choice
+        if reasoning is not None:
+            payload["reasoning"] = reasoning
 
         resp = self._post_with_retry(payload)
         resp.raise_for_status()
