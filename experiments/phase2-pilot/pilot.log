@@ -1,0 +1,24 @@
+
+=== q1: baseline (default config) ===
+  baseline = 3206 ms
+  iter 1: 3014 ms *best  (best 3014 ms, 1.06x) — Baseline: 8 cores for scan parallelism, AQE on to coalesce the tiny shuffle outp
+  iter 2: 2968 ms *best  (best 2968 ms, 1.08x) — This is a simple aggregation over lineitem with tiny output (4 groups). The bott
+  iter 3: 3196 ms  (best 2968 ms, 1.08x) — This is a pure scan+aggregate query; the bottleneck is the file scan and partial
+  iter 4: 2988 ms  (best 2968 ms, 1.08x) — This is a pure aggregation over lineitem with a filter; the shuffle is tiny (few
+  iter 5: 2988 ms  (best 2968 ms, 1.08x) — This is a pure aggregation query over a single table with tiny output (4 groups)
+  stop: 3 rounds without improvement
+
+=== q5: baseline (default config) ===
+  baseline = 3071 ms
+  iter 1: 3286 ms  (best 3071 ms, 1.00x) — Default plan already uses broadcast joins heavily; start with 8 cores, max heap,
+  iter 2: 2939 ms *best  (best 2939 ms, 1.04x) — Default run already uses 8 cores and broadcasts all small dims. The main cost is
+  iter 3: 3001 ms  (best 2939 ms, 1.04x) — Increasing shuffle partitions to 800 to see if finer partitioning of the orderke
+  iter 4: 2931 ms *best  (best 2931 ms, 1.05x) — Runs 1-3 show shuffle_partitions 400 was best (2939ms); the query is dominated b
+  iter 5: 2965 ms  (best 2931 ms, 1.05x) — The plan is dominated by broadcast joins and a final small aggregation; shuffle_
+  iter 6: 3031 ms  (best 2931 ms, 1.05x) — The query is dominated by broadcast joins and a final small aggregation; shuffle
+  iter 7: 3075 ms  (best 2931 ms, 1.05x) — The query is dominated by broadcast joins and a final aggregation/sort over only
+  stop: 3 rounds without improvement
+
+=== done in 3.5 min, LLM cost $0.0018 ===
+  q1: 3206 -> 2968 ms (1.08x)
+  q5: 3071 -> 2931 ms (1.05x)

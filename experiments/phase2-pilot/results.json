@@ -1,0 +1,414 @@
+[
+  {
+    "query": "q1",
+    "baseline_ms": 3206.3188552856445,
+    "default_plan": "   +- *(3) Sort [l_returnflag#16 ASC NULLS FIRST, l_linestatus#17 ASC NULLS FIRST], true, 0\n      +- AQEShuffleRead coalesced\n            +- Exchange rangepartitioning(l_returnflag#16 ASC NULLS FIRST, l_linestatus#17 ASC NULLS FIRST, 200), ENSURE_REQUIREMENTS, [plan_id=104]\n               +- *(2) HashAggregate(keys=[l_returnflag#16, l_linestatus#17], functions=[sum(l_quantity#12), sum(l_extendedprice#13), sum((l_extendedprice#13 * (1 - l_discount#14))), sum(((l_extendedprice#13 * (1 - l_discount#14)) * (1 + l_tax#15))), avg(l_quantity#12), avg(l_extendedprice#13), avg(l_discount#14), count(1)], output=[l_returnflag#16, l_linestatus#17, sum_qty#61, sum_base_price#62, sum_disc_price#63, sum_charge#64, avg_qty#65, avg_price#66, avg_disc#67, count_order#68L])\n                  +- AQEShuffleRead coalesced\n                        +- Exchange hashpartitioning(l_returnflag#16, l_linestatus#17, 200), ENSURE_REQUIREMENTS, [plan_id=72]\n                           +- *(1) HashAggregate(keys=[l_returnflag#16, l_linestatus#17], functions=[partial_sum(l_quantity#12), partial_sum(l_extendedprice#13), partial_sum((l_extendedprice#13 * (1 - l_discount#14))), partial_sum(((l_extendedprice#13 * (1 - l_discount#14)) * (1 + l_tax#15))), partial_avg(l_quantity#12), partial_avg(l_extendedprice#13), partial_avg(l_discount#14), partial_count(1)], output=[l_returnflag#16, l_linestatus#17, sum#92, isEmpty#93, sum#94, isEmpty#95, sum#96, isEmpty#97, sum#98, isEmpty#99, sum#100, count#101L, sum#102, count#103L, sum#104, count#105L, count#106L])\n                                       +- FileScan parquet [l_quantity#12,l_extendedprice#13,l_discount#14,l_tax#15,l_returnflag#16,l_linestatus#17,l_shipdate#18] Batched: true, DataFilters: [isnotnull(l_shipdate#18), (l_shipdate#18 <= 1998-09-02)], Format: Parquet, Location: InMemoryFileIndex(1 paths)[file:/home/italo/.claude/jobs/ff369c5b/tmp/tpch_sf1/lineitem.parquet], PartitionFilters: [], PushedFilters: [IsNotNull(l_shipdate), LessThanOrEqual(l_shipdate,1998-09-02)], ReadSchema: struct<l_quantity:decimal(15,2),l_extendedprice:decimal(15,2),l_discount:decimal(15,2),l_tax:deci...\n   Sort [l_returnflag#16 ASC NULLS FIRST, l_linestatus#17 ASC NULLS FIRST], true, 0\n   +- Exchange rangepartitioning(l_returnflag#16 ASC NULLS FIRST, l_linestatus#17 ASC NULLS FIRST, 200), ENSURE_REQUIREMENTS, [plan_id=46]\n      +- HashAggregate(keys=[l_returnflag#16, l_linestatus#17], functions=[sum(l_quantity#12), sum(l_extendedprice#13), sum((l_extendedprice#13 * (1 - l_discount#14))), sum(((l_extendedprice#13 * (1 - l_discount#14)) * (1 + l_tax#15))), avg(l_quantity#12), avg(l_extendedprice#13), avg(l_discount#14), count(1)], output=[l_returnflag#16, l_linestatus#17, sum_qty#61, sum_base_price#62, sum_disc_price#63, sum_charge#64, avg_qty#65, avg_price#66, avg_disc#67, count_order#68L])\n         +- Exchange hashpartitioning(l_returnflag#16, l_linestatus#17, 200), ENSURE_REQUIREMENTS, [plan_id=43]\n            +- HashAggregate(keys=[l_returnflag#16, l_linestatus#17], functions=[partial_sum(l_quantity#12), partial_sum(l_extendedprice#13), partial_sum((l_extendedprice#13 * (1 - l_discount#14))), partial_sum(((l_extendedprice#13 * (1 - l_discount#14)) * (1 + l_tax#15))), partial_avg(l_quantity#12), partial_avg(l_extendedprice#13), partial_avg(l_discount#14), partial_count(1)], output=[l_returnflag#16, l_linestatus#17, sum#92, isEmpty#93, sum#94, isEmpty#95, sum#96, isEmpty#97, sum#98, isEmpty#99, sum#100, count#101L, sum#102, count#103L, sum#104, count#105L, count#106L])\n                     +- FileScan parquet [l_quantity#12,l_extendedprice#13,l_discount#14,l_tax#15,l_returnflag#16,l_linestatus#17,l_shipdate#18] Batched: true, DataFilters: [isnotnull(l_shipdate#18), (l_shipdate#18 <= 1998-09-02)], Format: Parquet, Location: InMemoryFileIndex(1 paths)[file:/home/italo/.claude/jobs/ff369c5b/tmp/tpch_sf1/lineitem.parquet], PartitionFilters: [], PushedFilters: [IsNotNull(l_shipdate), LessThanOrEqual(l_shipdate,1998-09-02)], ReadSchema: struct<l_quantity:decimal(15,2),l_extendedprice:decimal(15,2),l_discount:decimal(15,2),l_tax:deci...",
+    "best_ms": 2968.1458473205566,
+    "best_config": {
+      "executor_cores": 8,
+      "executor_memory_gb": 6,
+      "executor_instances": 1,
+      "driver_memory_gb": 6,
+      "shuffle_partitions": 100,
+      "advisory_partition_mb": 64,
+      "aqe_enabled": true,
+      "broadcast_threshold_mb": 10
+    },
+    "speedup_vs_default": 1.080243027201677,
+    "llm_cost_usd": 0.00067978928,
+    "iterations": [
+      {
+        "iter": 1,
+        "config": {
+          "executor_cores": 8,
+          "executor_memory_gb": 4,
+          "executor_instances": 1,
+          "driver_memory_gb": 6,
+          "shuffle_partitions": 200,
+          "advisory_partition_mb": 64,
+          "aqe_enabled": true,
+          "broadcast_threshold_mb": 10
+        },
+        "status": "success",
+        "duration_ms": 3014.3051147460938,
+        "metrics": {
+          "shuffle_read_bytes": 14102,
+          "shuffle_write_bytes": 7473,
+          "input_bytes": 57316596,
+          "memory_spilled_bytes": 0,
+          "disk_spilled_bytes": 0,
+          "num_stages": 12,
+          "num_tasks": 19,
+          "gc_time_ms": 0,
+          "num_joins": 0,
+          "num_broadcast_joins": 0,
+          "num_exchanges": 4
+        },
+        "rationale": "Baseline: 8 cores for scan parallelism, AQE on to coalesce the tiny shuffle output, modest shuffle partitions since final result is only 4 groups.",
+        "error": "",
+        "best_ms_so_far": 3014.3051147460938
+      },
+      {
+        "iter": 2,
+        "config": {
+          "executor_cores": 8,
+          "executor_memory_gb": 6,
+          "executor_instances": 1,
+          "driver_memory_gb": 6,
+          "shuffle_partitions": 100,
+          "advisory_partition_mb": 64,
+          "aqe_enabled": true,
+          "broadcast_threshold_mb": 10
+        },
+        "status": "success",
+        "duration_ms": 2968.1458473205566,
+        "metrics": {
+          "shuffle_read_bytes": 14102,
+          "shuffle_write_bytes": 7473,
+          "input_bytes": 57316596,
+          "memory_spilled_bytes": 0,
+          "disk_spilled_bytes": 0,
+          "num_stages": 12,
+          "num_tasks": 19,
+          "gc_time_ms": 0,
+          "num_joins": 0,
+          "num_broadcast_joins": 0,
+          "num_exchanges": 4
+        },
+        "rationale": "This is a simple aggregation over lineitem with tiny output (4 groups). The bottleneck is scanning the parquet file and the two shuffles. Since the grouped result is tiny, reduce shuffle partitions so the post-aggregation shuffle is minimal; also the query has no joins so broadcast threshold is irrelevant. Try fewer shuffle partitions to reduce scheduling overhead on the small final aggregate.",
+        "error": "",
+        "best_ms_so_far": 2968.1458473205566
+      },
+      {
+        "iter": 3,
+        "config": {
+          "executor_cores": 8,
+          "executor_memory_gb": 6,
+          "executor_instances": 1,
+          "driver_memory_gb": 6,
+          "shuffle_partitions": 100,
+          "advisory_partition_mb": 64,
+          "aqe_enabled": true,
+          "broadcast_threshold_mb": 10
+        },
+        "status": "success",
+        "duration_ms": 3196.2387561798096,
+        "metrics": {
+          "shuffle_read_bytes": 14102,
+          "shuffle_write_bytes": 7473,
+          "input_bytes": 57316596,
+          "memory_spilled_bytes": 0,
+          "disk_spilled_bytes": 0,
+          "num_stages": 12,
+          "num_tasks": 19,
+          "gc_time_ms": 0,
+          "num_joins": 0,
+          "num_broadcast_joins": 0,
+          "num_exchanges": 4
+        },
+        "rationale": "This is a pure scan+aggregate query; the bottleneck is the file scan and partial aggregation, not shuffle. Try fewer cores to reduce scheduling overhead since data is small (SF1), and keep memory high.",
+        "error": "",
+        "best_ms_so_far": 2968.1458473205566
+      },
+      {
+        "iter": 4,
+        "config": {
+          "executor_cores": 8,
+          "executor_memory_gb": 6,
+          "executor_instances": 1,
+          "driver_memory_gb": 6,
+          "shuffle_partitions": 400,
+          "advisory_partition_mb": 64,
+          "aqe_enabled": true,
+          "broadcast_threshold_mb": 10
+        },
+        "status": "success",
+        "duration_ms": 2988.239288330078,
+        "metrics": {
+          "shuffle_read_bytes": 14102,
+          "shuffle_write_bytes": 7473,
+          "input_bytes": 57316596,
+          "memory_spilled_bytes": 0,
+          "disk_spilled_bytes": 0,
+          "num_stages": 12,
+          "num_tasks": 19,
+          "gc_time_ms": 0,
+          "num_joins": 0,
+          "num_broadcast_joins": 0,
+          "num_exchanges": 4
+        },
+        "rationale": "This is a pure aggregation over lineitem with a filter; the shuffle is tiny (few groups). The bottleneck is likely the scan and partial aggregation. Try increasing parallelism to 8 cores with more shuffle partitions to better parallelize the scan across the single parquet file, and keep AQE on.",
+        "error": "",
+        "best_ms_so_far": 2968.1458473205566
+      },
+      {
+        "iter": 5,
+        "config": {
+          "executor_cores": 8,
+          "executor_memory_gb": 6,
+          "executor_instances": 1,
+          "driver_memory_gb": 6,
+          "shuffle_partitions": 100,
+          "advisory_partition_mb": 64,
+          "aqe_enabled": true,
+          "broadcast_threshold_mb": 10
+        },
+        "status": "success",
+        "duration_ms": 2988.2750511169434,
+        "metrics": {
+          "shuffle_read_bytes": 14102,
+          "shuffle_write_bytes": 7473,
+          "input_bytes": 57316596,
+          "memory_spilled_bytes": 0,
+          "disk_spilled_bytes": 0,
+          "num_stages": 12,
+          "num_tasks": 19,
+          "gc_time_ms": 0,
+          "num_joins": 0,
+          "num_broadcast_joins": 0,
+          "num_exchanges": 4
+        },
+        "rationale": "This is a pure aggregation query over a single table with tiny output (4 groups); shuffle is minimal and the bottleneck is the scan. Try fewer shuffle partitions to reduce the two-stage aggregation overhead while keeping 8 cores for scan parallelism.",
+        "error": "",
+        "best_ms_so_far": 2968.1458473205566
+      }
+    ]
+  },
+  {
+    "query": "q5",
+    "baseline_ms": 3070.7714557647705,
+    "default_plan": "   +- *(9) Sort [revenue#61 DESC NULLS LAST], true, 0\n      +- AQEShuffleRead coalesced\n            +- Exchange rangepartitioning(revenue#61 DESC NULLS LAST, 200), ENSURE_REQUIREMENTS, [plan_id=943]\n               +- *(8) HashAggregate(keys=[n_name#25], functions=[sum((l_extendedprice#13 * (1 - l_discount#14)))], output=[n_name#25, revenue#61])\n                  +- AQEShuffleRead coalesced\n                        +- Exchange hashpartitioning(n_name#25, 200), ENSURE_REQUIREMENTS, [plan_id=895]\n                           +- *(7) HashAggregate(keys=[n_name#25], functions=[partial_sum((l_extendedprice#13 * (1 - l_discount#14)))], output=[n_name#25, sum#65, isEmpty#66])\n                                 +- *(7) BroadcastHashJoin [n_regionkey#26], [r_regionkey#51], Inner, BuildRight, false\n                                    :  +- *(7) BroadcastHashJoin [s_nationkey#57], [n_nationkey#24], Inner, BuildRight, false\n                                    :     :  +- *(7) BroadcastHashJoin [l_suppkey#10L, c_nationkey#3], [s_suppkey#54L, s_nationkey#57], Inner, BuildRight, false\n                                    :     :     :  +- *(7) BroadcastHashJoin [o_orderkey#28L], [l_orderkey#8L], Inner, BuildLeft, false\n                                    :     :     :     :  +- BroadcastExchange HashedRelationBroadcastMode(List(input[1, bigint, true]),false), [plan_id=772]\n                                    :     :     :     :     +- AQEShuffleRead local\n                                    :     :     :     :           +- Exchange hashpartitioning(o_orderkey#28L, 200), ENSURE_REQUIREMENTS, [plan_id=658]\n                                    :     :     :     :                 +- *(6) BroadcastHashJoin [c_custkey#0L], [o_custkey#29L], Inner, BuildLeft, false\n                                    :     :     :     :                    :  +- BroadcastExchange HashedRelationBroadcastMode(List(input[0, bigint, false]),false), [plan_id=235]\n                                    :     :     :     :                    :           +- FileScan parquet [c_custkey#0L,c_nationkey#3] Batched: true, DataFilters: [isnotnull(c_custkey#0L), isnotnull(c_nationkey#3)], Format: Parquet, Location: InMemoryFileIndex(1 paths)[file:/home/italo/.claude/jobs/ff369c5b/tmp/tpch_sf1/customer.parquet], PartitionFilters: [], PushedFilters: [IsNotNull(c_custkey), IsNotNull(c_nationkey)], ReadSchema: struct<c_custkey:bigint,c_nationkey:int>\n                                    :     :     :     :                             +- FileScan parquet [o_orderkey#28L,o_custkey#29L,o_orderdate#32] Batched: true, DataFilters: [isnotnull(o_orderdate#32), (o_orderdate#32 >= 1994-01-01), (o_orderdate#32 < 1995-01-01), isnotn..., Format: Parquet, Location: InMemoryFileIndex(1 paths)[file:/home/italo/.claude/jobs/ff369c5b/tmp/tpch_sf1/orders.parquet], PartitionFilters: [], PushedFilters: [IsNotNull(o_orderdate), GreaterThanOrEqual(o_orderdate,1994-01-01), LessThan(o_orderdate,1995-01..., ReadSchema: struct<o_orderkey:bigint,o_custkey:bigint,o_orderdate:date>\n                                    :     :     :     +- AQEShuffleRead local\n                                    :     :     :           +- Exchange hashpartitioning(l_orderkey#8L, 200), ENSURE_REQUIREMENTS, [plan_id=254]\n                                    :     :     :                    +- FileScan parquet [l_orderkey#8L,l_suppkey#10L,l_extendedprice#13,l_discount#14] Batched: true, DataFilters: [isnotnull(l_orderkey#8L), isnotnull(l_suppkey#10L)], Format: Parquet, Location: InMemoryFileIndex(1 paths)[file:/home/italo/.claude/jobs/ff369c5b/tmp/tpch_sf1/lineitem.parquet], PartitionFilters: [], PushedFilters: [IsNotNull(l_orderkey), IsNotNull(l_suppkey)], ReadSchema: struct<l_orderkey:bigint,l_suppkey:bigint,l_extendedprice:decimal(15,2),l_discount:decimal(15,2)>\n                                    :     :        +- BroadcastExchange HashedRelationBroadcastMode(List(input[0, bigint, false], input[1, int, false]),false), [plan_id=273]\n                                    :     :                 +- FileScan parquet [s_suppkey#54L,s_nationkey#57] Batched: true, DataFilters: [isnotnull(s_suppkey#54L), isnotnull(s_nationkey#57)], Format: Parquet, Location: InMemoryFileIndex(1 paths)[file:/home/italo/.claude/jobs/ff369c5b/tmp/tpch_sf1/supplier.parquet], PartitionFilters: [], PushedFilters: [IsNotNull(s_suppkey), IsNotNull(s_nationkey)], ReadSchema: struct<s_suppkey:bigint,s_nationkey:int>\n                                    :        +- BroadcastExchange HashedRelationBroadcastMode(List(cast(input[0, int, false] as bigint)),false), [plan_id=290]\n                                    :                 +- FileScan parquet [n_nationkey#24,n_name#25,n_regionkey#26] Batched: true, DataFilters: [isnotnull(n_nationkey#24), isnotnull(n_regionkey#26)], Format: Parquet, Location: InMemoryFileIndex(1 paths)[file:/home/italo/.claude/jobs/ff369c5b/tmp/tpch_sf1/nation.parquet], PartitionFilters: [], PushedFilters: [IsNotNull(n_nationkey), IsNotNull(n_regionkey)], ReadSchema: struct<n_nationkey:int,n_name:string,n_regionkey:int>\n                                       +- BroadcastExchange HashedRelationBroadcastMode(List(cast(input[0, int, true] as bigint)),false), [plan_id=309]\n                                                   +- FileScan parquet [r_regionkey#51,r_name#52] Batched: true, DataFilters: [isnotnull(r_name#52), (r_name#52 = ASIA), isnotnull(r_regionkey#51)], Format: Parquet, Location: InMemoryFileIndex(1 paths)[file:/home/italo/.claude/jobs/ff369c5b/tmp/tpch_sf1/region.parquet], PartitionFilters: [], PushedFilters: [IsNotNull(r_name), EqualTo(r_name,ASIA), IsNotNull(r_regionkey)], ReadSchema: struct<r_regionkey:int,r_name:string>\n   Sort [revenue#61 DESC NULLS LAST], true, 0\n   +- Exchange rangepartitioning(revenue#61 DESC NULLS LAST, 200), ENSURE_REQUIREMENTS, [plan_id=164]\n      +- HashAggregate(keys=[n_name#25], functions=[sum((l_extendedprice#13 * (1 - l_discount#14)))], output=[n_name#25, revenue#61])\n         +- Exchange hashpartitioning(n_name#25, 200), ENSURE_REQUIREMENTS, [plan_id=161]\n            +- HashAggregate(keys=[n_name#25], functions=[partial_sum((l_extendedprice#13 * (1 - l_discount#14)))], output=[n_name#25, sum#65, isEmpty#66])\n                  +- BroadcastHashJoin [n_regionkey#26], [r_regionkey#51], Inner, BuildRight, false\n                     :  +- BroadcastHashJoin [s_nationkey#57], [n_nationkey#24], Inner, BuildRight, false\n                     :     :  +- BroadcastHashJoin [l_suppkey#10L, c_nationkey#3], [s_suppkey#54L, s_nationkey#57], Inner, BuildRight, false\n                     :     :     :  +- SortMergeJoin [o_orderkey#28L], [l_orderkey#8L], Inner\n                     :     :     :     :- Sort [o_orderkey#28L ASC NULLS FIRST], false, 0\n                     :     :     :     :  +- Exchange hashpartitioning(o_orderkey#28L, 200), ENSURE_REQUIREMENTS, [plan_id=141]\n                     :     :     :     :        +- BroadcastHashJoin [c_custkey#0L], [o_custkey#29L], Inner, BuildLeft, false\n                     :     :     :     :           :- BroadcastExchange HashedRelationBroadcastMode(List(input[0, bigint, false]),false), [plan_id=136]\n                     :     :     :     :           :     +- FileScan parquet [c_custkey#0L,c_nationkey#3] Batched: true, DataFilters: [isnotnull(c_custkey#0L), isnotnull(c_nationkey#3)], Format: Parquet, Location: InMemoryFileIndex(1 paths)[file:/home/italo/.claude/jobs/ff369c5b/tmp/tpch_sf1/customer.parquet], PartitionFilters: [], PushedFilters: [IsNotNull(c_custkey), IsNotNull(c_nationkey)], ReadSchema: struct<c_custkey:bigint,c_nationkey:int>\n                     :     :     :     :                 +- FileScan parquet [o_orderkey#28L,o_custkey#29L,o_orderdate#32] Batched: true, DataFilters: [isnotnull(o_orderdate#32), (o_orderdate#32 >= 1994-01-01), (o_orderdate#32 < 1995-01-01), isnotn..., Format: Parquet, Location: InMemoryFileIndex(1 paths)[file:/home/italo/.claude/jobs/ff369c5b/tmp/tpch_sf1/orders.parquet], PartitionFilters: [], PushedFilters: [IsNotNull(o_orderdate), GreaterThanOrEqual(o_orderdate,1994-01-01), LessThan(o_orderdate,1995-01..., ReadSchema: struct<o_orderkey:bigint,o_custkey:bigint,o_orderdate:date>\n                     :     :     :     +- Sort [l_orderkey#8L ASC NULLS FIRST], false, 0\n                     :     :     :        +- Exchange hashpartitioning(l_orderkey#8L, 200), ENSURE_REQUIREMENTS, [plan_id=142]\n                     :     :     :              +- FileScan parquet [l_orderkey#8L,l_suppkey#10L,l_extendedprice#13,l_discount#14] Batched: true, DataFilters: [isnotnull(l_orderkey#8L), isnotnull(l_suppkey#10L)], Format: Parquet, Location: InMemoryFileIndex(1 paths)[file:/home/italo/.claude/jobs/ff369c5b/tmp/tpch_sf1/lineitem.parquet], PartitionFilters: [], PushedFilters: [IsNotNull(l_orderkey), IsNotNull(l_suppkey)], ReadSchema: struct<l_orderkey:bigint,l_suppkey:bigint,l_extendedprice:decimal(15,2),l_discount:decimal(15,2)>\n... (+6 more)",
+    "best_ms": 2931.072950363159,
+    "best_config": {
+      "executor_cores": 8,
+      "executor_memory_gb": 6,
+      "executor_instances": 1,
+      "driver_memory_gb": 6,
+      "shuffle_partitions": 200,
+      "advisory_partition_mb": 64,
+      "aqe_enabled": true,
+      "broadcast_threshold_mb": 10
+    },
+    "speedup_vs_default": 1.0476612175020423,
+    "llm_cost_usd": 0.0010757563280000002,
+    "iterations": [
+      {
+        "iter": 1,
+        "config": {
+          "executor_cores": 8,
+          "executor_memory_gb": 6,
+          "executor_instances": 1,
+          "driver_memory_gb": 6,
+          "shuffle_partitions": 200,
+          "advisory_partition_mb": 64,
+          "aqe_enabled": true,
+          "broadcast_threshold_mb": 10
+        },
+        "status": "success",
+        "duration_ms": 3286.2300872802734,
+        "metrics": {
+          "shuffle_read_bytes": 106724632,
+          "shuffle_write_bytes": 106720872,
+          "input_bytes": 73641695,
+          "memory_spilled_bytes": 0,
+          "disk_spilled_bytes": 0,
+          "num_stages": 19,
+          "num_tasks": 43,
+          "gc_time_ms": 0,
+          "num_joins": 10,
+          "num_broadcast_joins": 9,
+          "num_exchanges": 17
+        },
+        "rationale": "Default plan already uses broadcast joins heavily; start with 8 cores, max heap, AQE on, moderate shuffle partitions and advisory size for the aggregation/sort stages.",
+        "error": "",
+        "best_ms_so_far": 3070.7714557647705
+      },
+      {
+        "iter": 2,
+        "config": {
+          "executor_cores": 8,
+          "executor_memory_gb": 6,
+          "executor_instances": 1,
+          "driver_memory_gb": 6,
+          "shuffle_partitions": 400,
+          "advisory_partition_mb": 64,
+          "aqe_enabled": true,
+          "broadcast_threshold_mb": 10
+        },
+        "status": "success",
+        "duration_ms": 2939.239263534546,
+        "metrics": {
+          "shuffle_read_bytes": 107218397,
+          "shuffle_write_bytes": 107214637,
+          "input_bytes": 73641695,
+          "memory_spilled_bytes": 0,
+          "disk_spilled_bytes": 0,
+          "num_stages": 19,
+          "num_tasks": 43,
+          "gc_time_ms": 0,
+          "num_joins": 10,
+          "num_broadcast_joins": 9,
+          "num_exchanges": 17
+        },
+        "rationale": "Default run already uses 8 cores and broadcasts all small dims. The main cost is the lineitem/orders join and the final sort. Try increasing shuffle_partitions to reduce per-partition sizes for the lineitem shuffle, and keep AQE on to coalesce. Let me first probe with more shuffle partitions to see if the lineitem exchange benefits from finer granularity.",
+        "error": "",
+        "best_ms_so_far": 2939.239263534546
+      },
+      {
+        "iter": 3,
+        "config": {
+          "executor_cores": 8,
+          "executor_memory_gb": 6,
+          "executor_instances": 1,
+          "driver_memory_gb": 6,
+          "shuffle_partitions": 800,
+          "advisory_partition_mb": 64,
+          "aqe_enabled": true,
+          "broadcast_threshold_mb": 10
+        },
+        "status": "success",
+        "duration_ms": 3001.094102859497,
+        "metrics": {
+          "shuffle_read_bytes": 108152627,
+          "shuffle_write_bytes": 108148867,
+          "input_bytes": 73641695,
+          "memory_spilled_bytes": 0,
+          "disk_spilled_bytes": 0,
+          "num_stages": 19,
+          "num_tasks": 43,
+          "gc_time_ms": 0,
+          "num_joins": 10,
+          "num_broadcast_joins": 9,
+          "num_exchanges": 17
+        },
+        "rationale": "Increasing shuffle partitions to 800 to see if finer partitioning of the orderkey/lineitem exchange reduces per-task work; run 2 showed 400 beat 200 so trend may continue.",
+        "error": "",
+        "best_ms_so_far": 2939.239263534546
+      },
+      {
+        "iter": 4,
+        "config": {
+          "executor_cores": 8,
+          "executor_memory_gb": 6,
+          "executor_instances": 1,
+          "driver_memory_gb": 6,
+          "shuffle_partitions": 200,
+          "advisory_partition_mb": 64,
+          "aqe_enabled": true,
+          "broadcast_threshold_mb": 10
+        },
+        "status": "success",
+        "duration_ms": 2931.072950363159,
+        "metrics": {
+          "shuffle_read_bytes": 106724632,
+          "shuffle_write_bytes": 106720872,
+          "input_bytes": 73641695,
+          "memory_spilled_bytes": 0,
+          "disk_spilled_bytes": 0,
+          "num_stages": 19,
+          "num_tasks": 43,
+          "gc_time_ms": 0,
+          "num_joins": 10,
+          "num_broadcast_joins": 9,
+          "num_exchanges": 17
+        },
+        "rationale": "Runs 1-3 show shuffle_partitions 400 was best (2939ms); the query is dominated by broadcast joins and the final aggregation over a tiny n_name key. Try shuffle_partitions 200 with smaller advisory to reduce tiny-task overhead on the final aggregate, while keeping 8 cores.",
+        "error": "",
+        "best_ms_so_far": 2931.072950363159
+      },
+      {
+        "iter": 5,
+        "config": {
+          "executor_cores": 8,
+          "executor_memory_gb": 6,
+          "executor_instances": 1,
+          "driver_memory_gb": 6,
+          "shuffle_partitions": 200,
+          "advisory_partition_mb": 64,
+          "aqe_enabled": true,
+          "broadcast_threshold_mb": 10
+        },
+        "status": "success",
+        "duration_ms": 2965.266227722168,
+        "metrics": {
+          "shuffle_read_bytes": 106724632,
+          "shuffle_write_bytes": 106720872,
+          "input_bytes": 73641695,
+          "memory_spilled_bytes": 0,
+          "disk_spilled_bytes": 0,
+          "num_stages": 19,
+          "num_tasks": 43,
+          "gc_time_ms": 0,
+          "num_joins": 10,
+          "num_broadcast_joins": 9,
+          "num_exchanges": 17
+        },
+        "rationale": "The plan is dominated by broadcast joins and a final small aggregation; shuffle_partitions=400 was best. Try disabling broadcast joins to see if the default broadcast-heavy plan is suboptimal, or keep broadcasts but reduce shuffle partitions further. I'll test lower shuffle_partitions=200 with a smaller advisory to reduce post-shuffle partition count overhead.",
+        "error": "",
+        "best_ms_so_far": 2931.072950363159
+      },
+      {
+        "iter": 6,
+        "config": {
+          "executor_cores": 8,
+          "executor_memory_gb": 6,
+          "executor_instances": 1,
+          "driver_memory_gb": 6,
+          "shuffle_partitions": 200,
+          "advisory_partition_mb": 64,
+          "aqe_enabled": true,
+          "broadcast_threshold_mb": 10
+        },
+        "status": "success",
+        "duration_ms": 3031.2411785125732,
+        "metrics": {
+          "shuffle_read_bytes": 106724632,
+          "shuffle_write_bytes": 106720872,
+          "input_bytes": 73641695,
+          "memory_spilled_bytes": 0,
+          "disk_spilled_bytes": 0,
+          "num_stages": 19,
+          "num_tasks": 43,
+          "gc_time_ms": 0,
+          "num_joins": 10,
+          "num_broadcast_joins": 9,
+          "num_exchanges": 17
+        },
+        "rationale": "The query is dominated by broadcast joins and a final small aggregation; shuffle partitions barely matter (107MB stable). Try reducing cores to lower scheduling overhead since parallelism isn't the bottleneck, keeping everything else identical to the best run (2931ms).",
+        "error": "",
+        "best_ms_so_far": 2931.072950363159
+      },
+      {
+        "iter": 7,
+        "config": {
+          "executor_cores": 8,
+          "executor_memory_gb": 6,
+          "executor_instances": 1,
+          "driver_memory_gb": 6,
+          "shuffle_partitions": 1000,
+          "advisory_partition_mb": 64,
+          "aqe_enabled": true,
+          "broadcast_threshold_mb": 10
+        },
+        "status": "success",
+        "duration_ms": 3075.314998626709,
+        "metrics": {
+          "shuffle_read_bytes": 108149620,
+          "shuffle_write_bytes": 108145860,
+          "input_bytes": 73641695,
+          "memory_spilled_bytes": 0,
+          "disk_spilled_bytes": 0,
+          "num_stages": 19,
+          "num_tasks": 43,
+          "gc_time_ms": 0,
+          "num_joins": 10,
+          "num_broadcast_joins": 9,
+          "num_exchanges": 17
+        },
+        "rationale": "The query is dominated by broadcast joins and a final aggregation/sort over only ~25 nations. The shuffle is small (107MB) and no spill. The main cost is the lineitem scan and the broadcast join chain. Let me try increasing shuffle_partitions to 1000 to see if finer partitioning of the lineitem/order shuffle helps, while keeping everything else stable.",
+        "error": "",
+        "best_ms_so_far": 2931.072950363159
+      }
+    ]
+  }
+]
