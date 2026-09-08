@@ -1,0 +1,14 @@
+# Smoke da campanha Phase-2 no cluster RNP (spec 2026-09-07 secao 2.3).
+# k=1 (sem repeticoes) para validar o loop fechado end-to-end antes da campanha
+# falsificavel completa. Braco LLM, L0 (sem probe DuckDB).
+name: cluster-smoke-sf100
+mode: optimize
+backend: spark_k8s
+arm: llm
+level: L0
+provider: deepseek/deepseek-v4-flash-0731
+datasets: [sf100]
+queries: [q03, q23, q50]
+tries: 1
+max_iters: 8
+patience: 2
