@@ -1,35 +1,25 @@
 # Pack de recursos do cluster para o modo de proposta livre (sem oracle de matriz).
-# Conteudo publico (capacidade do cluster, perfis de executor) - NAO contem
-# resultados medidos nem vieses de desempenho.
+# Conteudo publico (capacidade do cluster) - NAO contem resultados medidos nem
+# vieses de desempenho. As faixas de knobs vivem em knob-ranges.yaml; os caps
+# fisicos (Guardian) vivem em cluster-rnp.yaml.
 loop:
   instrucoes: >
     Proponha a melhor configuracao INICIAL para a carga descrita. Voce esta em
     um loop: apos a execucao real, voce recebera metricas (tempo, status por
-    query, custo) e podera refinar a configuracao na proxima rodada. Nao existe
-    um oraculo de resultados medidos disponivel agora - decida com base na
-    descricao da carga, nos recursos do cluster e no seu raciocinio sobre
-    Spark. Descreva os recursos disponiveis que voce esta considerando e
-    justifique brevemente a escolha (rationale conciso).
+    query, shuffle/spill/gc) e podera refinar a configuracao na proxima rodada.
+    Nao existe um oraculo de resultados medidos disponivel - decida com base na
+    descricao da carga, no plano/telemetria, nos recursos do cluster e no seu
+    raciocinio sobre Spark. Voce tem LIBERDADE total para escolher qualquer
+    valor dentro das faixas (knob_ranges); nao ha perfis pre-definidos.
+    Justifique brevemente a escolha (rationale conciso).
 
-# Nao usar a chave 'cluster' aqui: KnowledgePack.cluster (consumido pelo Guardian
-# para validar bounds) le o PRIMEIRO doc do pack que tiver essa chave, e
-# cluster-example.yaml ja fornece o schema numerico esperado (max_cores_per_container
-# etc.). Uma segunda chave 'cluster' com schema diferente quebraria o Guardian
-# silenciosamente se a ordem alfabetica dos arquivos mudasse.
+# Nao usar a chave 'cluster' aqui (Guardian le cluster-rnp.yaml). Este bloco e so
+# descricao textual da capacidade, para o raciocinio do advisor.
 cluster_resources:
   nodes: "10 nos Ready: 3x48 cores/187Gi, 1x24 cores/172Gi, 6x8 cores/15Gi (control-plane/edge)"
   total_cores: 200
   total_memory_gb: 843
-  storage: "MinIO (S3-compativel) com tabelas Delta Lake; Spark 3.5 sobre Kubernetes (spark-submit, k8s:// master)"
+  storage: "MinIO (S3-compativel) com tabelas Delta Lake; Spark sobre Kubernetes (spark-submit, k8s:// master)"
   namespace_scoped: true
-
-executor_profiles:
-  available:
-    - {cores: 2, memory_gb: 7, label: xsmall, max_workers: 20}
-    - {cores: 4, memory_gb: 14, label: small, max_workers: 12}
-    - {cores: 8, memory_gb: 28, label: medium, max_workers: 8}
-    - {cores: 12, memory_gb: 48, label: large, max_workers: 6}
-    - {cores: 24, memory_gb: 96, label: xlarge, max_workers: 6}
-  note: "escolha um par (cores, memory_gb) de um destes perfis; memory_gb acompanha cores"
 
 engine: spark-3.5

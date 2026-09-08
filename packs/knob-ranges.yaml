@@ -1,0 +1,18 @@
+# Faixas dos knobs para PROPOSTA LIVRE (Phase 2). Substitui o antigo menu de 5
+# perfis: o advisor NAO escolhe de uma lista pre-definida -- ele propoe QUALQUER
+# valor dentro das faixas abaixo, respeitando os caps fisicos (cluster-rnp.yaml).
+proposal:
+  freedom: >
+    Voce escolhe LIVREMENTE qualquer valor dentro das faixas abaixo, respeitando
+    os limites fisicos do cluster. Nao ha perfis pre-definidos a seguir; qualquer
+    combinacao valida e permitida. Combinacoes incomuns (ex.: muitos executors
+    pequenos, ou poucos grandes) sao bem-vindas se o plano/telemetria sugerirem.
+  knob_ranges:
+    executor_cores: {min: 1, max: 24}
+    executor_memory_gb: {min: 4, max: 96}
+    executor_instances: {min: 1, max: 20}
+    driver_memory_gb: {min: 4, max: 16}
+    shuffle_partitions: {min: 100, max: 4000}
+    advisory_partition_mb: {min: 16, max: 256}
+    aqe_enabled: {values: [true, false]}
+    broadcast_threshold_mb: {min: -1, max: 512, note: "-1 desliga broadcast join"}
