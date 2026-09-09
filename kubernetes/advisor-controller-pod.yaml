@@ -1,0 +1,43 @@
+# Controller in-cluster do advisor-loop (roda a campanha Phase-2 sem depender do
+# PC do usuario). Padrao exp05-controller: SA ns-admin, roda kubectl local no pod.
+# Resultados (journal) sobem para MinIO s3://advisor-results/<RESULT_PREFIX>/.
+# Imagem em GHCR (duravel, sem TTL de 1w; mesmo registry do spark-advisor).
+# O pacote GHCR precisa ser PUBLIC (o cluster nao tem imagePullSecret p/ ghcr).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: advisor-controller-smoke
+  namespace: italo-unb
+  labels:
+    app: advisor-controller
+    campaign: cluster-smoke-sf100
+spec:
+  serviceAccountName: ns-admin
+  restartPolicy: Never
+  # imagem GHCR privada -> pull secret (dockerconfigjson so-ghcr.io) no namespace.
+  # spark-advisor e publica, entao o pod launcher nao precisa deste secret.
+  imagePullSecrets:
+    - name: ghcr-pull
+  nodeSelector:
+    kubernetes.io/hostname: ids-pb        # egress (OpenRouter/GHCR) + imagem cacheada
+  containers:
+    - name: controller
+      image: ghcr.io/italovinicius18/advisor-controller:sf100-r2
+      imagePullPolicy: Always
+      env:
+        - name: CAMPAIGN
+          value: campaigns/cluster-smoke-sf100.yaml
+        - name: RESULT_PREFIX
+          value: smoke-sf100
+        - name: OPENROUTER_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: advisor-secrets
+              key: OPENROUTER_API_KEY
+      resources:
+        requests:
+          memory: "512Mi"
+          cpu: "250m"
+        limits:
+          memory: "1Gi"
+          cpu: "500m"

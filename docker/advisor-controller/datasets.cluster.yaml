@@ -1,0 +1,49 @@
+# datasets.yaml para o CONTROLLER in-cluster. Diferenca-chave vs o datasets.yaml
+# local: ssh_cmd = [bash, -c] -> o SparkSubmitter roda `kubectl ...` LOCALMENTE
+# dentro do pod (auth in-cluster via ServiceAccount ns-admin), sem SSH.
+s3:
+  # ids-pb usa DNS externo (p/ egress do LLM) e NAO resolve *.cluster.local
+  # (NXDOMAIN). O ClusterIP do svc minio, porem, e roteavel por IP a partir de
+  # ids-pb (kube-proxy). Por isso usamos o IP fixo do ClusterIP, nao o nome DNS.
+  endpoint: 10.50.217.20:9000
+  key_id: minioadmin
+  secret: minioadmin
+  use_ssl: false
+  url_style: path
+sf100:
+  call_center: s3://silver/sf100/delta/parquet/call_center
+  catalog_page: s3://silver/sf100/delta/parquet/catalog_page
+  catalog_returns: s3://silver/sf100/delta/parquet/catalog_returns
+  catalog_sales: s3://silver/sf100/delta/parquet/catalog_sales
+  customer: s3://silver/sf100/delta/parquet/customer
+  customer_address: s3://silver/sf100/delta/parquet/customer_address
+  customer_demographics: s3://silver/sf100/delta/parquet/customer_demographics
+  date_dim: s3://silver/sf100/delta/parquet/date_dim
+  household_demographics: s3://silver/sf100/delta/parquet/household_demographics
+  income_band: s3://silver/sf100/delta/parquet/income_band
+  inventory: s3://silver/sf100/delta/parquet/inventory
+  item: s3://silver/sf100/delta/parquet/item
+  promotion: s3://silver/sf100/delta/parquet/promotion
+  reason: s3://silver/sf100/delta/parquet/reason
+  ship_mode: s3://silver/sf100/delta/parquet/ship_mode
+  store: s3://silver/sf100/delta/parquet/store
+  store_returns: s3://silver/sf100/delta/parquet/store_returns
+  store_sales: s3://silver/sf100/delta/parquet/store_sales
+  time_dim: s3://silver/sf100/delta/parquet/time_dim
+  warehouse: s3://silver/sf100/delta/parquet/warehouse
+  web_page: s3://silver/sf100/delta/parquet/web_page
+  web_returns: s3://silver/sf100/delta/parquet/web_returns
+  web_sales: s3://silver/sf100/delta/parquet/web_sales
+  web_site: s3://silver/sf100/delta/parquet/web_site
+spark:
+  ssh_cmd: [bash, -c]        # exec local no pod (sem SSH); kubectl usa a SA in-cluster
+  image: ghcr.io/italovinicius18/spark-advisor:4.2.0-delta-r8
+  # Multi-no via nodeAffinity (nao node_selector de no unico): fixar ids-pb (24c)
+  # starvava executores e impedia o otimo de q23/q50 (72c/288Gi, exige >= 2 nos)
+  # -> regret confundido com o cap do no. O SA namespace-scoped nao pode rotular
+  # nodes, entao a unica via e podTemplateFile com affinity In [...] assado na
+  # imagem. pod_template_file mira driver+executors; node_affinity_hostnames
+  # espelha a MESMA lista p/ o pod launcher (que nao le o arquivo assado).
+  # Pool de egress = nos que puxam a imagem do GHCR e roteiam o MinIO.
+  pod_template_file: /opt/advisor/pod-template-egress.yaml
+  node_affinity_hostnames: [ids-es, ids-rn, ids-pb]

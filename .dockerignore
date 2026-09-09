@@ -1,0 +1,12 @@
+.git
+.venv-campaign
+venv
+evidence
+data
+docs
+tests
+smoke-sf100.log
+run.log
+**/__pycache__
+*.pyc
+.env

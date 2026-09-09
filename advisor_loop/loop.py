@@ -11,11 +11,17 @@ DEFAULT_CFG = ConfigVector(executor_cores=8, executor_memory_gb=8, executor_inst
 
 
 def _run_median(deps: Deps, ep: Episode, rec: Recommendation, tries: int):
-    """Executa a config `tries` vezes e devolve (mediana_ms, duracoes, metricas).
+    """Executa a config `tries` vezes e devolve (mediana_ms, duracoes, metricas, err).
     As metricas representativas vem da execucao cuja duracao esta mais proxima da
-    mediana -> denoise do ruido run-to-run (que dominava o piloto SF1)."""
+    mediana -> denoise do ruido run-to-run (que dominava o piloto SF1).
+
+    `err` = None quando ao menos uma try teve sucesso; caso contrario carrega
+    {"query_status", "error"} da ultima execucao sem sucesso, para o journal
+    registrar POR QUE a proposta falhou (timeout/oom/erro de query) em vez de um
+    "error" mudo -- sem isso, q23/q50 no smoke gravaram error sem diagnostico."""
     durs: list[float] = []
     metrics_by: dict[float, dict] = {}
+    err: dict | None = None
     for _ in range(tries):
         out = deps.backend.execute(ep, rec)
         for qr in out.per_query.values():
@@ -23,11 +29,12 @@ def _run_median(deps: Deps, ep: Episode, rec: Recommendation, tries: int):
                 durs.append(qr.duration_ms)
                 metrics_by[qr.duration_ms] = qr.metrics or {}
                 break
+            err = {"query_status": qr.status, "error": qr.error}
     if not durs:
-        return None, [], {}
+        return None, [], {}, err
     med = statistics.median(durs)
     key = min(metrics_by, key=lambda d: abs(d - med))
-    return med, durs, metrics_by[key]
+    return med, durs, metrics_by[key], None
 
 
 def optimize(episode: Episode, deps: Deps, advisor, max_iters: int = 4,
@@ -46,7 +53,7 @@ def optimize(episode: Episode, deps: Deps, advisor, max_iters: int = 4,
     probe = deps.probe_factory(episode)
 
     # iteracao 0: baseline default (k tries -> mediana), sem entrar no historico
-    baseline_ms, _bdurs, _bm = _run_median(
+    baseline_ms, _bdurs, _bm, _berr = _run_median(
         deps, episode, Recommendation(config=DEFAULT_CFG, rationale="baseline"), tries)
 
     for i in range(1, max_iters + 1):
@@ -61,12 +68,12 @@ def optimize(episode: Episode, deps: Deps, advisor, max_iters: int = 4,
             no_improve += 1
             iterations.append({"iter": i, "config": rec.config.model_dump(),
                                "status": out.status, "duration_ms": None,
-                               "durations_ms": [], "samples": 0})
+                               "durations_ms": [], "samples": 0, "reason": reason})
             if no_improve >= patience or i == max_iters:
                 break
             continue
 
-        dur, durations, metrics = _run_median(deps, episode, rec, tries)
+        dur, durations, metrics, err = _run_median(deps, episode, rec, tries)
         status = "completed" if dur is not None else "error"
         # Outcome sintetico para memoria/historico: carrega a mediana + metricas
         # representativas (mesma forma que o backend produziria numa unica run).
@@ -82,7 +89,9 @@ def optimize(episode: Episode, deps: Deps, advisor, max_iters: int = 4,
                              "config": rec.config.model_dump(),
                              "config_hash": rec.config.config_hash(),
                              "duration_ms": dur, "durations_ms": durations,
-                             "metrics": metrics, "rationale": rec.rationale})
+                             "metrics": metrics, "rationale": rec.rationale,
+                             "query_status": err["query_status"] if err else None,
+                             "error": err["error"] if err else None})
         deps.memory.distill(episode, rec, out)
 
         history.append((rec.config, out))
@@ -95,7 +104,9 @@ def optimize(episode: Episode, deps: Deps, advisor, max_iters: int = 4,
         iterations.append({"iter": i, "config": rec.config.model_dump(),
                            "status": out.status, "duration_ms": dur,
                            "durations_ms": durations, "samples": len(durations),
-                           "metrics": metrics})
+                           "metrics": metrics,
+                           "query_status": err["query_status"] if err else None,
+                           "error": err["error"] if err else None})
 
         if no_improve >= patience or i == max_iters:
             break
