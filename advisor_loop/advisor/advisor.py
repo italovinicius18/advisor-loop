@@ -49,6 +49,14 @@ def _fmt_bytes(n) -> str:
         n /= 1024
 
 
+def _fmt_count(n) -> str:
+    n = float(n or 0)
+    for unit in ("", "K", "M", "B"):
+        if n < 1000 or unit == "B":
+            return f"{n:.0f}{unit}"
+        n /= 1000
+
+
 def fmt_metrics(m: dict) -> str:
     """Resumo compacto das métricas reais (só campos não-zero) para o histórico
     do LLM - dá sinais causais (shuffle/spill/gc) além do tempo puro."""
@@ -106,6 +114,18 @@ def _history_hints(history: list[tuple[ConfigVector, Outcome]]) -> str:
         spill = (m.get("memory_spill_bytes", 0) or 0) + (m.get("disk_spill_bytes", 0) or 0)
         if spill:
             hints.append("Houve spill: aumente memoria por executor ou shuffle_partitions.")
+        # Trust-region + bracketing (TuRBO/OPRO): com uma regiao boa ja conhecida,
+        # gastar orcamento refinando LOCALMENTE em torno dela bate saltos aleatorios;
+        # e o bracketing dos cores totais ataca direto a falha de calibracao de
+        # paralelismo (achar o joelho da curva tempo x cores totais).
+        tc = best_cv.executor_cores * best_cv.executor_instances
+        hints.append(
+            f"MELHOR ate agora: {best_cv.executor_cores}c x {best_cv.executor_instances}w "
+            f"= {tc} cores totais ({best_qr.duration_ms:g}ms). Faca BUSCA LOCAL em torno dela: "
+            "mude UM eixo por vez em passos pequenos (~25-50%), nao salte para configs distantes. "
+            f"Para calibrar o paralelismo, faca BRACKETING dos cores totais: proponha uma config "
+            f"com MAIS que {tc} cores totais e, noutra iteracao, uma com MENOS cores totais, para "
+            "achar o joelho da curva tempo x cores totais.")
     if history:
         inst = sorted({cv.executor_instances for cv, _ in history})
         mem = sorted({cv.executor_memory_gb for cv, _ in history})
@@ -125,20 +145,47 @@ def _history_hints(history: list[tuple[ConfigVector, Outcome]]) -> str:
     return " ".join(hints)
 
 
+def _derived_signals(cv: ConfigVector, qr) -> str:
+    """Sinais derivados que o LLM sozinho erra ao raciocinar em prosa: paralelismo
+    total (cores_tot = cores/exec * instancias), memoria por tarefa (mem/core) e a
+    fracao de GC sobre o wall. Expor esses numeros ao lado do tempo torna EXPLICITA
+    a relacao paralelismo<->tempo que o modelo nao calibra (super-provisiona query
+    leve, sub-provisiona query pesada)."""
+    tc = cv.executor_cores * cv.executor_instances
+    mpc = cv.executor_memory_gb / cv.executor_cores
+    parts = [f"cores_tot={tc}", f"mem/core={mpc:.1f}g"]
+    m = qr.metrics or {}
+    gc = m.get("gc_time_ms") or 0
+    if gc and qr.duration_ms:
+        parts.append(f"gc/wall={100 * gc / qr.duration_ms:.0f}%")
+    if m.get("records_read"):
+        parts.append(f"rec={_fmt_count(m['records_read'])}")
+    return ", ".join(parts)
+
+
 def render_history(history: list[tuple[ConfigVector, Outcome]]) -> str:
-    """Uma linha por iteracao anterior desta query: config + duracao + metricas
-    reais (sucesso) ou status (falha, ex.: oom) - realimenta o advisor com
-    resultados reais (tempo E shuffle/spill/gc) em vez de adivinhar as cegas."""
-    lines = []
-    for i, (cv, outcome) in enumerate(history, start=1):
-        prefix = (f"iter {i}: {cv.executor_cores}c/{cv.executor_memory_gb}g/"
-                  f"{cv.executor_instances}w")
+    """Trajetoria realimentada ao advisor, formatada estilo OPRO (Yang et al.,
+    ICLR 2024): as execucoes com SUCESSO vem ORDENADAS por tempo (pior -> melhor),
+    de modo que a MELHOR config fique por ULTIMO (mais perto do ponto de geracao) e
+    o modelo infira a direcao de melhora a partir do ranking, em vez de ler uma
+    ordem cronologica sem sinal. Cada linha carrega config + sinais derivados
+    (cores totais, mem/core, gc/wall) + metricas reais (shuffle/spill/gc). As falhas
+    vem antes, agrupadas, para nao poluir o ranking dos sucessos."""
+    def prefix(cv):
+        return f"{cv.executor_cores}c/{cv.executor_memory_gb}g/{cv.executor_instances}w"
+    succ, fail = [], []
+    for cv, outcome in history:
         qr = next((q for q in outcome.per_query.values()
                    if q.status == "success" and q.duration_ms is not None), None)
-        if qr is not None:
-            lines.append(f"{prefix} → {qr.duration_ms:g}ms{fmt_metrics(qr.metrics)}")
-        else:
-            lines.append(f"{prefix} → {outcome.status}")
+        (succ if qr is not None else fail).append((cv, outcome, qr))
+    lines = [f"{prefix(cv)} → {outcome.status}" for cv, outcome, _ in fail]
+    succ.sort(key=lambda t: t[2].duration_ms, reverse=True)  # pior primeiro, melhor por ultimo
+    for cv, _, qr in succ:
+        lines.append(f"{prefix(cv)} ({_derived_signals(cv, qr)}) → "
+                     f"{qr.duration_ms:g}ms{fmt_metrics(qr.metrics)}")
+    if succ:
+        lines.append("(acima: ordenado do PIOR ao MELHOR tempo; a ULTIMA linha e a "
+                     "melhor config ate agora -- proponha uma que a supere.)")
     return "\n".join(lines)
 
 

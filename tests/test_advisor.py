@@ -256,6 +256,33 @@ def test_render_history_includes_metrics():
     assert fmt_metrics({}) == "" and fmt_metrics({"input_bytes": 0}) == ""
 
 
+def test_render_history_sorts_best_last_and_shows_total_cores():
+    """OPRO-style: sucessos ordenados do pior ao melhor tempo (melhor por ultimo) e
+    cada linha expoe os cores totais (paralelismo), sinal que o LLM nao calibra."""
+    slow = ConfigVector(**{**CFG, "executor_cores": 2, "executor_instances": 2})   # 4 cores
+    fast = ConfigVector(**{**CFG, "executor_cores": 8, "executor_instances": 8})   # 64 cores
+    hist = [
+        (fast, Outcome(status="completed", per_query={"q": QueryResult(
+            status="success", duration_ms=1000.0)})),
+        (slow, Outcome(status="completed", per_query={"q": QueryResult(
+            status="success", duration_ms=5000.0)})),
+    ]
+    s = render_history(hist)
+    assert "cores_tot=64" in s and "cores_tot=4" in s
+    # a melhor (1000ms) vem DEPOIS da pior (5000ms) no texto
+    assert s.index("5000ms") < s.index("1000ms")
+
+
+def test_derived_signals_gc_fraction_and_records():
+    from advisor_loop.advisor.advisor import _derived_signals
+    cv = ConfigVector(**CFG)  # 4c x 4w = 16 cores totais, 14/4 = 3.5g/core
+    qr = QueryResult(status="success", duration_ms=10000.0,
+                     metrics={"gc_time_ms": 2500, "records_read": 288_000_000})
+    d = _derived_signals(cv, qr)
+    assert "cores_tot=16" in d and "mem/core=3.5g" in d
+    assert "gc/wall=25%" in d and "rec=288M" in d
+
+
 def test_history_injected_into_context(tmp_path):
     j = Journal(tmp_path / "j.jsonl")
     client = FakeClient([_submit_call()])
@@ -297,6 +324,16 @@ def test_history_hints_flags_untried_few_fat_and_high_gc():
     assert "menos executores" not in h
     # shuffle-aware: a melhor config era shuffle-heavy (9GB) -> preserva paralelismo
     assert "shuffle" in h and ("cores totais" in h or "paralelismo" in h)
+
+
+def test_history_hints_local_search_and_bracketing():
+    """Com uma melhor config conhecida, o nudge pede busca local + bracketing dos
+    cores totais (calibracao de paralelismo), sem empurrar 'menos executores'."""
+    from advisor_loop.advisor.advisor import _history_hints
+    h = _history_hints(_hist_scaleout_thin()).lower()
+    assert "busca local" in h
+    assert "bracketing" in h and "cores totais" in h
+    assert "menos executores" not in h
 
 
 def test_history_hints_cores_gap_and_no_shuffle_clause_when_light():
