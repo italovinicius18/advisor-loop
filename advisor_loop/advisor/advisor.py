@@ -69,6 +69,45 @@ def fmt_metrics(m: dict) -> str:
     return f" ({', '.join(parts)})" if parts else ""
 
 
+def _history_hints(history: list[tuple[ConfigVector, Outcome]]) -> str:
+    """Dicas causais derivadas do historico desta query -- ataca o modo de falha
+    visto no smoke: o LLM ficou preso no quadrante scale-out (muitos executores
+    finos) e nunca amostrou a regiao do otimo do grid (poucos executores com
+    memoria grande). (1) se a MELHOR config teve GC/spill alto, empurra para
+    menos executores com mais memoria; (2) nudge de COBERTURA: lista o que ja
+    foi testado e aponta a direcao ainda nao explorada."""
+    succ = [(cv, qr) for cv, o in history
+            for qr in [next((q for q in o.per_query.values()
+                             if q.status == "success" and q.duration_ms is not None), None)]
+            if qr is not None]
+    hints: list[str] = []
+    if succ:
+        best_cv, best_qr = min(succ, key=lambda t: t[1].duration_ms)
+        m = best_qr.metrics or {}
+        gc = m.get("gc_time_ms", 0) or 0
+        dur = best_qr.duration_ms or 0
+        if gc and dur and gc >= 0.25 * dur:
+            hints.append(f"GC domina a melhor config ate agora (gc={gc:g}ms vs "
+                         f"wall={dur:g}ms, {best_cv.executor_instances}x{best_cv.executor_memory_gb}g): "
+                         "prefira MENOS executores com MAIS memoria cada (nao mais executores finos).")
+        spill = (m.get("memory_spill_bytes", 0) or 0) + (m.get("disk_spill_bytes", 0) or 0)
+        if spill:
+            hints.append("Houve spill: aumente memoria por executor ou shuffle_partitions.")
+    if history:
+        inst = sorted({cv.executor_instances for cv, _ in history})
+        mem = sorted({cv.executor_memory_gb for cv, _ in history})
+        cov = f"Ja testou executor_instances={inst} e memory_gb/exec={mem}."
+        gaps = []
+        if inst and min(inst) > 4:
+            gaps.append("poucos executores (ex.: 4-8)")
+        if mem and max(mem) < 48:
+            gaps.append("memoria alta por executor (ex.: 48-96g)")
+        if gaps:
+            cov += " Ainda NAO explorou: " + " e ".join(gaps) + " -- experimente na proxima."
+        hints.append(cov)
+    return " ".join(hints)
+
+
 def render_history(history: list[tuple[ConfigVector, Outcome]]) -> str:
     """Uma linha por iteracao anterior desta query: config + duracao + metricas
     reais (sucesso) ou status (falha, ex.: oom) - realimenta o advisor com
@@ -104,10 +143,13 @@ class Advisor:
         mem = "\n".join(f"- {m}" for m in memories) or "(sem memorias)"
         user_content = f"{context}\n\n## Memorias de episodios anteriores\n{mem}"
         if history:
+            hints = _history_hints(history)
             user_content = (
                 f"{user_content}\n\n## Iteracoes anteriores nesta query (min_time)\n"
                 f"{render_history(history)}\nProponha uma config que REDUZA o tempo; "
-                "se alguma falhou por OOM, ajuste memoria/paralelismo.")
+                "se alguma falhou por OOM ou foi inviavel, ajuste memoria/paralelismo "
+                "e respeite as restricoes rigidas."
+                + (f"\nDICAS: {hints}" if hints else ""))
         if probe is not None:
             user_content = (
                 "IMPORTANTE: as colunas das tabelas Silver sao todas VARCHAR (nao "

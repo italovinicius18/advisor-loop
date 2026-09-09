@@ -98,3 +98,30 @@ def test_invalid_recommendation_does_not_crash_and_continues(tmp_path):
     assert r["iterations"][0]["duration_ms"] is None
     assert len(r["iterations"]) == 3
     assert r["best_duration_ms"] == 3000
+
+
+class NBadThenGoodAdvisor:
+    """As primeiras `bad` iteracoes propoem config inviavel; depois, validas."""
+    def __init__(self, bad):
+        self.bad, self.i = bad, 0
+    def advise(self, ep, ctx, probe, mems, history=None):
+        self.i += 1
+        if self.i <= self.bad:
+            cfg = ConfigVector(**{**CFG, "executor_cores": 20, "executor_instances": 20})
+        else:
+            cfg = ConfigVector(**{**CFG, "executor_instances": 5 + self.i})
+        return Recommendation(rationale="", config=cfg)
+
+
+def test_invalid_recommendations_do_not_trigger_early_stop(tmp_path):
+    """Propostas inviaveis NAO devem contar no patience: com patience=2, duas
+    inviaveis em sequencia abortariam o laco no comportamento antigo. Agora o
+    laco segue ate uma valida e ate max_iters, provando que infeasible != 'sem
+    melhora'."""
+    ep = Episode(workload="w", dataset="sf1", queries=["q03"], provider="m")
+    be = ScriptBackend([9000, 4000, 3000])   # baseline + 2 execucoes validas
+    r = optimize(ep, _deps(tmp_path, be), NBadThenGoodAdvisor(bad=2),
+                 max_iters=4, patience=2)
+    assert [it["status"] for it in r["iterations"]] == [
+        "invalid_recommendation", "invalid_recommendation", "completed", "completed"]
+    assert r["best_duration_ms"] == 3000
