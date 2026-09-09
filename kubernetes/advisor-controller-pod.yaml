@@ -22,13 +22,13 @@ spec:
     kubernetes.io/hostname: ids-pb        # egress (OpenRouter/GHCR) + imagem cacheada
   containers:
     - name: controller
-      image: ghcr.io/italovinicius18/advisor-controller:sf100-r3
+      image: ghcr.io/italovinicius18/advisor-controller:sf100-r5
       imagePullPolicy: Always
       env:
         - name: CAMPAIGN
-          value: campaigns/cluster-smoke-sf100.yaml
+          value: campaigns/cluster-smoke-sf100-k3-sonnet.yaml
         - name: RESULT_PREFIX
-          value: smoke-sf100-ctx
+          value: smoke-sf100-k3-sonnet
         - name: OPENROUTER_API_KEY
           valueFrom:
             secretKeyRef:

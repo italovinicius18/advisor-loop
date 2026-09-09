@@ -291,8 +291,30 @@ def test_history_hints_flags_untried_few_fat_and_high_gc():
     h = _history_hints(_hist_scaleout_thin()).lower()
     # nudge de cobertura: reporta o que ja testou e aponta a direcao nao explorada
     assert "poucos executores" in h and "memoria alta" in h
-    # dica de GC: a melhor config teve GC dominante -> empurra p/ menos+gordos
-    assert "gc domina" in h and "menos executores" in h
+    # dica de GC: diagnostica concorrencia-por-heap (reduzir cores/exec), NAO
+    # "menos executores" monotono
+    assert "gc domina" in h and "executor_cores" in h
+    assert "menos executores" not in h
+    # shuffle-aware: a melhor config era shuffle-heavy (9GB) -> preserva paralelismo
+    assert "shuffle" in h and ("cores totais" in h or "paralelismo" in h)
+
+
+def test_history_hints_cores_gap_and_no_shuffle_clause_when_light():
+    """Modo de falha do sonnet/deepseek: cores/exec saturados no cap (24) com
+    pouco shuffle. O nudge deve (a) apontar cores/exec MODERADOS como regiao nao
+    explorada e (b) NAO pedir para preservar cores totais (query nao e shuffle-
+    heavy), evitando o conselho que sub-paralelizou a q50."""
+    from advisor_loop.advisor.advisor import _history_hints
+    from advisor_loop.episode import Outcome, QueryResult
+    cv = ConfigVector(**{**CFG, "executor_cores": 24, "executor_instances": 4,
+                         "executor_memory_gb": 90})
+    h = _history_hints([(cv, Outcome(status="completed", per_query={"q": QueryResult(
+        status="success", duration_ms=200000.0,
+        metrics={"gc_time_ms": 120000, "shuffle_write_bytes": 10 * 1024 ** 2})})) ]).lower()
+    assert "cores/exec moderados" in h
+    assert "gc domina" in h and "executor_cores" in h
+    # shuffle leve (10MB) -> sem a clausula de preservar cores totais
+    assert "pesada em shuffle" not in h
 
 
 def test_history_hints_no_coverage_gap_when_space_covered():
