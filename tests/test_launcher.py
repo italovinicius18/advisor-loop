@@ -42,3 +42,26 @@ def test_node_selector_pins_launcher_driver_executors():
     args = " ".join(doc["spec"]["containers"][0]["args"])
     assert "spark.kubernetes.driver.node.selector.kubernetes.io/hostname=ids-pb" in args
     assert "spark.kubernetes.executor.node.selector.kubernetes.io/hostname=ids-pb" in args
+
+
+def test_pod_template_affinity_targets_egress_pool():
+    # via multi-no: podTemplateFile p/ driver+executors + nodeAffinity In [...]
+    # no pod launcher. Necessario p/ configs que nao cabem num no so (q23/q50).
+    m = render_launcher(_cv(), sf="sf100", query="q23", run_id="r7",
+                        image="img", result_s3="s3://advisor-results/r7.json",
+                        pod_template_file="/opt/advisor/pod-template-egress.yaml",
+                        node_affinity_hostnames=["ids-es", "ids-rn", "ids-pb"])
+    doc = yaml.safe_load(m)
+    args = " ".join(doc["spec"]["containers"][0]["args"])
+    assert "spark.kubernetes.driver.podTemplateFile=/opt/advisor/pod-template-egress.yaml" in args
+    assert "spark.kubernetes.executor.podTemplateFile=/opt/advisor/pod-template-egress.yaml" in args
+    # sem node.selector de igualdade nesta via
+    assert "node.selector" not in args
+    # o pod launcher usa nodeAffinity (nao nodeSelector) ao mesmo pool
+    assert "nodeSelector" not in doc["spec"]
+    terms = doc["spec"]["affinity"]["nodeAffinity"][
+        "requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"]
+    expr = terms[0]["matchExpressions"][0]
+    assert expr["key"] == "kubernetes.io/hostname"
+    assert expr["operator"] == "In"
+    assert expr["values"] == ["ids-es", "ids-rn", "ids-pb"]

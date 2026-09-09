@@ -44,9 +44,12 @@ def build_deps(campaign_path: Path, root: Path = Path(".")) -> Deps:
         return BudgetedProbe(DuckDBProbe(tables, s3_config=s3_config))
 
     if camp.get("backend") == "spark_k8s":
-        backend = SparkK8sBackend(SparkSubmitter(ssh_cmd=spark_config["ssh_cmd"],
-                                                  image=spark_config["image"],
-                                                  node_selector=spark_config.get("node_selector")))
+        backend = SparkK8sBackend(SparkSubmitter(
+            ssh_cmd=spark_config["ssh_cmd"],
+            image=spark_config["image"],
+            node_selector=spark_config.get("node_selector"),
+            pod_template_file=spark_config.get("pod_template_file"),
+            node_affinity_hostnames=spark_config.get("node_affinity_hostnames")))
     elif camp.get("backend") == "proposal":
         backend = ProposalBackend()
     else:

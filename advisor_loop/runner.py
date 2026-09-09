@@ -86,6 +86,15 @@ def _run_optimize_campaign(camp: dict, deps: Deps, adv: Advisor) -> dict:
     laco (optimize() ja retrieve/distill incondicionalmente) - nao ha gate de
     camp["memory"] aqui, ao contrario do fluxo single-shot acima."""
     from advisor_loop.loop import optimize          # import local: evita ciclo runner<->loop
+    arm = camp.get("arm", "llm")
+    if arm == "random":                             # braco de controle: proposta livre aleatoria
+        from advisor_loop.studies.advisors import FreeRandomAdvisor
+        advisor = FreeRandomAdvisor(deps.guardian, seed=camp.get("seed", 0))
+    elif arm == "llm":
+        advisor = adv                               # braco principal: Advisor (LLM)
+    else:
+        raise ValueError(f"arm desconhecido: {arm!r} (use 'llm' ou 'random')")
+    tries = camp.get("tries", 1)
     ran = skipped = 0
     cost = 0.0
     for dataset in camp["datasets"]:
@@ -97,9 +106,9 @@ def _run_optimize_campaign(camp: dict, deps: Deps, adv: Advisor) -> dict:
             if deps.journal.has(ek):        # config-independent: nunca re-executa no resume
                 skipped += 1
                 continue
-            result = optimize(ep, deps, adv, max_iters=camp.get("max_iters", 4),
-                              patience=camp.get("patience", 2))
-            deps.journal.append({"kind": "opt_result", "task_key": ek,
+            result = optimize(ep, deps, advisor, max_iters=camp.get("max_iters", 4),
+                              patience=camp.get("patience", 2), tries=tries)
+            deps.journal.append({"kind": "opt_result", "task_key": ek, "arm": arm,
                                  "query": query, "dataset": dataset,
                                  "provider": ep.provider, "level": ep.level,
                                  **result})

@@ -1,0 +1,29 @@
+# Pod template do Spark (driver + executors) para o cluster RNP.
+# Motivo: o SA ns-admin e namespace-scoped e NAO pode rotular nodes (recurso
+# cluster-scope), entao nao da p/ criar um label compartilhado e usar o
+# node.selector (igualdade) do Spark para mirar um CONJUNTO de nos. A unica via
+# valida sob esse RBAC e nodeAffinity com matchExpressions In [...], que o Spark
+# so aceita via podTemplateFile (nao ha --conf equivalente).
+#
+# Restringe o schedule ao POOL de egress {ids-es, ids-rn, ids-pb}: sao os nos
+# que (a) tem egress -> puxam a imagem spark-advisor do GHCR (pullPolicy
+# IfNotPresent falha nos sem egress e sem cache), (b) roteiam o MinIO por
+# ClusterIP (kube-proxy, cluster-wide). Fixar num no so starvava os executores
+# (24c em ids-pb) e, pior, tornava impossivel o otimo do grid de q23/q50
+# (12c x 6w = 72c/288Gi -> exige >= 2 nos) -> regret confundido com o cap do no.
+# Esta lista e propriedade FIXA do cluster; espelhada em datasets.cluster.yaml
+# (spark.node_affinity_hostnames) so para a afinidade do POD launcher.
+apiVersion: v1
+kind: Pod
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                  - ids-es
+                  - ids-rn
+                  - ids-pb

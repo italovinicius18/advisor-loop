@@ -33,14 +33,16 @@ def _deps(tmp_path, backend):
 
 def test_stops_on_no_improvement(tmp_path):
     ep=Episode(workload="w",dataset="sf1",queries=["q03"],provider="m")
-    be=ScriptBackend([5000, 4000, 4200, 4300, 4100])
+    # 1a duracao = baseline (default cfg, iter 0); demais = propostas
+    be=ScriptBackend([9000, 5000, 4000, 4200, 4300, 4100])
     r=optimize(ep, _deps(tmp_path,be), ScriptAdvisor([]), max_iters=5, patience=2)
     assert r["best_duration_ms"]==4000
+    assert r["baseline_ms"]==9000
     assert len(r["iterations"])==4
 
 def test_stops_on_max_iters(tmp_path):
     ep=Episode(workload="w",dataset="sf1",queries=["q03"],provider="m")
-    be=ScriptBackend([5000,4900,4800,4700,4600])
+    be=ScriptBackend([9000, 5000,4900,4800,4700,4600])
     r=optimize(ep, _deps(tmp_path,be), ScriptAdvisor([]), max_iters=3, patience=2)
     assert len(r["iterations"])==3 and r["best_duration_ms"]==4800
 
@@ -66,7 +68,7 @@ def test_iteration_record_and_journal_include_metrics(tmp_path):
 
 def test_oom_does_not_crash(tmp_path):
     ep=Episode(workload="w",dataset="sf1",queries=["q03"],provider="m")
-    be=ScriptBackend([None, 4000, 4100, 4200])
+    be=ScriptBackend([9000, None, 4000, 4100, 4200])
     r=optimize(ep, _deps(tmp_path,be), ScriptAdvisor([]), max_iters=4, patience=2)
     assert r["best_duration_ms"]==4000
 
@@ -90,7 +92,7 @@ def test_invalid_recommendation_does_not_crash_and_continues(tmp_path):
     quebrar, deve registrar a iteracao como invalid_recommendation e seguir
     ate uma iteracao valida (Task 8 coverage gap)."""
     ep = Episode(workload="w", dataset="sf1", queries=["q03"], provider="m")
-    be = ScriptBackend([4000, 3000])
+    be = ScriptBackend([9000, 4000, 3000])   # baseline + 2 execucoes validas
     r = optimize(ep, _deps(tmp_path, be), OneBadThenGoodAdvisor(), max_iters=3, patience=2)
     assert r["iterations"][0]["status"] == "invalid_recommendation"
     assert r["iterations"][0]["duration_ms"] is None

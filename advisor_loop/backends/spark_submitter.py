@@ -20,13 +20,18 @@ class SparkSubmitter:
 
     def __init__(self, ssh_cmd: list[str], image: str, result_bucket: str = "advisor-results",
                  poll_interval_s: float = 10, max_wall_clock_s: float = 1200,
-                 node_selector: dict | None = None, runner=subprocess.run):
+                 node_selector: dict | None = None,
+                 pod_template_file: str | None = None,
+                 node_affinity_hostnames: list[str] | None = None,
+                 runner=subprocess.run):
         self.ssh_cmd = ssh_cmd
         self.image = image
         self.result_bucket = result_bucket
         self.poll_interval_s = poll_interval_s
         self.max_wall_clock_s = max_wall_clock_s
         self.node_selector = node_selector
+        self.pod_template_file = pod_template_file
+        self.node_affinity_hostnames = node_affinity_hostnames
         self.runner = runner
 
     def _run(self, remote_cmd: str):
@@ -43,7 +48,9 @@ class SparkSubmitter:
         driver_pod = f"advisor-{run_id}-driver"
         result_s3 = f"s3://{self.result_bucket}/{run_id}.json"
         manifest = render_launcher(config, sf, query, run_id, self.image, result_s3,
-                                   node_selector=self.node_selector)
+                                   node_selector=self.node_selector,
+                                   pod_template_file=self.pod_template_file,
+                                   node_affinity_hostnames=self.node_affinity_hostnames)
 
         try:
             apply_result = self._run(f"cat <<'EOF' | kubectl apply -f -\n{manifest}\nEOF")

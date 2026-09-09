@@ -1,7 +1,0 @@
-cluster:
-  max_cores_per_container: 24
-  max_memory_gb_per_container: 96
-  max_pods: 20
-  total_cores: 100
-  total_memory_gb: 400
-  storage: "object store S3-compativel; tabelas Delta"

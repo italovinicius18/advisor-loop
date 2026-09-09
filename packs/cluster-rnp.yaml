@@ -1,0 +1,15 @@
+# Caps fisicos do cluster RNP para o Guardian (spec 2026-09-07 secao 3.2).
+# UNICO doc do pack com a chave 'cluster' -> KnowledgePack.cluster le daqui.
+# total_cores/total_memory_gb refletem o POOL de escalonamento do Spark (os nos
+# de egress ids-es+ids-rn+ids-pb, via nodeAffinity em datasets.cluster.yaml):
+# ~120c/~500Gi. Conservador em 400Gi (co-scheduling). Precisa comportar o otimo
+# do grid mais pesado dessas queries: q23/q50 = 12c x 6w = 72c / 288Gi -> exige
+# >= 2 nos (impossivel num no so). max_pods=40 admite executor_instances=20
+# (20+1<40), entao o otimo do grid para q03 (20 workers) tambem e alcancavel.
+cluster:
+  max_cores_per_container: 24
+  max_memory_gb_per_container: 96
+  max_pods: 40
+  total_cores: 120
+  total_memory_gb: 400
+  storage: "MinIO (S3-compativel); tabelas Delta Lake; Spark sobre Kubernetes"

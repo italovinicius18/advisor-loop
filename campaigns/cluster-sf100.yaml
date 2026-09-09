@@ -1,0 +1,16 @@
+# Campanha Phase-2 falsificavel no cluster RNP (spec 2026-09-07 secao 2.2).
+# Rode uma vez por braco: 'arm: llm' (principal) e depois 'arm: random'
+# (controle de busca livre). B=8/k=3. Baseline = oraculo da matriz
+# (data/matrix/training_data.parquet). Uma execucao por vez no cluster
+# (regra de contaminacao) -- nunca em paralelo.
+name: cluster-sf100
+mode: optimize
+backend: spark_k8s
+arm: llm            # troque para 'random' na rodada de controle
+level: L0
+provider: deepseek/deepseek-v4-flash-0731
+datasets: [sf100]
+queries: [q03, q23, q50]
+tries: 3
+max_iters: 8
+patience: 2

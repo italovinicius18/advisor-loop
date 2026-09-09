@@ -10,11 +10,20 @@ FIXED_CONFS = [
 ]
 
 def render_launcher(config: ConfigVector, sf: str, query: str, run_id: str,
-                     image: str, result_s3: str, node_selector: dict | None = None) -> str:
+                     image: str, result_s3: str, node_selector: dict | None = None,
+                     pod_template_file: str | None = None,
+                     node_affinity_hostnames: list[str] | None = None) -> str:
     driver_pod = f"advisor-{run_id}-driver"
-    # targeting de no opcional: clusters heterogeneos (DNS/egress irregular, imagem
-    # cacheada so em alguns nos) precisam fixar driver+executors num no conhecido.
+    # targeting de no opcional. Duas vias mutuamente exclusivas:
+    #  - node_selector (igualdade): fixa driver+executors num UNICO no conhecido
+    #    (usado no smoke local; simples, mas nao mira um conjunto de nos).
+    #  - pod_template_file: nodeAffinity In [...] assada na imagem -> mira o POOL
+    #    de egress (>= 2 nos), unica via sob RBAC namespace-scoped (sem rotular
+    #    nodes). Necessario p/ configs que nao cabem num no so (q23/q50 = 72c).
     node_confs = []
+    if pod_template_file:
+        node_confs += ["--conf", f"spark.kubernetes.driver.podTemplateFile={pod_template_file}"]
+        node_confs += ["--conf", f"spark.kubernetes.executor.podTemplateFile={pod_template_file}"]
     for k, v in (node_selector or {}).items():
         node_confs += ["--conf", f"spark.kubernetes.driver.node.selector.{k}={v}"]
         node_confs += ["--conf", f"spark.kubernetes.executor.node.selector.{k}={v}"]
@@ -57,6 +66,20 @@ def render_launcher(config: ConfigVector, sf: str, query: str, run_id: str,
         "local:///opt/advisor/driver.py",
     ]
 
+    # O POD launcher tambem precisa cair no pool de egress (roda spark-submit da
+    # mesma imagem e fica de pe durante a run). Espelha o node_affinity_hostnames
+    # do template assado -- o launcher nao le o arquivo da imagem em tempo de
+    # render, entao a lista vem via config (unica fonte dinamica p/ este pod).
+    pod_targeting: dict = {}
+    if node_affinity_hostnames:
+        pod_targeting["affinity"] = {"nodeAffinity": {
+            "requiredDuringSchedulingIgnoredDuringExecution": {"nodeSelectorTerms": [
+                {"matchExpressions": [{"key": "kubernetes.io/hostname",
+                                       "operator": "In",
+                                       "values": list(node_affinity_hostnames)}]}]}}}
+    elif node_selector:
+        pod_targeting["nodeSelector"] = node_selector
+
     manifest = {
         "apiVersion": "v1",
         "kind": "Pod",
@@ -67,7 +90,7 @@ def render_launcher(config: ConfigVector, sf: str, query: str, run_id: str,
         "spec": {
             "serviceAccountName": "ns-admin",
             "restartPolicy": "Never",
-            **({"nodeSelector": node_selector} if node_selector else {}),
+            **pod_targeting,
             "containers": [
                 {
                     "name": "spark-submit",

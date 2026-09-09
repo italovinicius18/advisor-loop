@@ -102,6 +102,40 @@ class RandomAdvisor:
         return Recommendation(config=cfg, rationale=f"A1 random trial #{len(history) + 1}")
 
 
+class FreeRandomAdvisor:
+    """Busca aleatoria no SCHEMA LIVRE: amostra cada campo do ConfigVector
+    uniformemente na sua faixa, com rejection-sampling contra um Guardian para
+    que toda proposta seja viavel. Deterministico por
+    (seed, dataset, query, len(history)); evita repetir config dentro do
+    episodio. Mesmo espaco de busca do braco LLM -> controle justo (nao a grade
+    discreta, como o A1 RandomAdvisor)."""
+
+    _INT = {"executor_cores": (1, 24), "executor_memory_gb": (4, 96),
+            "executor_instances": (1, 20), "driver_memory_gb": (4, 16),
+            "shuffle_partitions": (100, 4000), "advisory_partition_mb": (16, 256),
+            "broadcast_threshold_mb": (-1, 512)}
+
+    def __init__(self, guardian, seed: int = 0):
+        self.guardian = guardian
+        self.seed = seed
+
+    def _sample(self, rng) -> ConfigVector:
+        f = {k: rng.randint(lo, hi) for k, (lo, hi) in self._INT.items()}
+        f["aqe_enabled"] = rng.random() < 0.5
+        return ConfigVector(**f)
+
+    def advise(self, ep: Episode, context: str, probe, memories: list[str],
+               history: list = []) -> Recommendation:
+        seen = {c.config_hash() for c, _ in history}
+        rng = random.Random(f"{self.seed}|{ep.dataset}|{ep.queries[0]}|{len(history)}")
+        for _ in range(2000):
+            cfg = self._sample(rng)
+            if self.guardian.validate(cfg)[0] and cfg.config_hash() not in seen:
+                return Recommendation(config=cfg,
+                                      rationale=f"free-random trial #{len(history) + 1}")
+        raise RuntimeError("FreeRandomAdvisor: sem config viavel e unica em 2000 tentativas")
+
+
 class SurrogateAdvisor:
     """A2 — proxy zero-shot do LakeHelm: para a query-alvo, a melhor config
     observada em OUTROS scale factors (leave-one-scale-out). Um único palpite;
