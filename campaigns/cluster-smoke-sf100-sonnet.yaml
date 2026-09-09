@@ -1,0 +1,17 @@
+# Model-audit arm (Phase-2): identical to cluster-smoke-sf100.yaml (SAME enriched
+# context, queries, budget) but provider=claude-sonnet-5 instead of deepseek.
+# Clean capability audit: holds context constant, varies only the model, to test
+# whether a stronger reasoner calibrates the multi-variable executor tradeoff
+# (fat mem good / high cores bad / tiny queries want many-tiny) that deepseek
+# saturated-to-caps on. Compare medians vs smoke-sf100-ctx (deepseek enriched).
+name: cluster-smoke-sf100-sonnet
+mode: optimize
+backend: spark_k8s
+arm: llm
+level: L0
+provider: anthropic/claude-sonnet-5
+datasets: [sf100]
+queries: [q03, q23, q50]
+tries: 1
+max_iters: 8
+patience: 3
