@@ -268,3 +268,49 @@ def test_history_injected_into_context(tmp_path):
     ])
     user_msg = client.last_kwargs["messages"][1]["content"]
     assert "4300" in user_msg
+
+
+def _hist_scaleout_thin():
+    """Historico que reproduz o modo de falha do smoke: so executores finos e
+    numerosos (>4 instancias, <48g cada), com GC alto na melhor config."""
+    from advisor_loop.episode import Outcome, QueryResult
+    def cfg(inst, mem):
+        return ConfigVector(**{**CFG, "executor_instances": inst, "executor_memory_gb": mem})
+    return [
+        (cfg(10, 30), Outcome(status="completed", per_query={"q": QueryResult(
+            status="success", duration_ms=200000.0,
+            metrics={"gc_time_ms": 120000, "shuffle_write_bytes": 9 * 1024**3})})),
+        (cfg(12, 32), Outcome(status="completed", per_query={"q": QueryResult(
+            status="success", duration_ms=183000.0,
+            metrics={"gc_time_ms": 90000, "shuffle_write_bytes": 9 * 1024**3})})),
+    ]
+
+
+def test_history_hints_flags_untried_few_fat_and_high_gc():
+    from advisor_loop.advisor.advisor import _history_hints
+    h = _history_hints(_hist_scaleout_thin()).lower()
+    # nudge de cobertura: reporta o que ja testou e aponta a direcao nao explorada
+    assert "poucos executores" in h and "memoria alta" in h
+    # dica de GC: a melhor config teve GC dominante -> empurra p/ menos+gordos
+    assert "gc domina" in h and "menos executores" in h
+
+
+def test_history_hints_no_coverage_gap_when_space_covered():
+    """Se o historico ja cobre poucos executores E memoria alta, nao insiste no
+    nudge de cobertura (evita ruido)."""
+    from advisor_loop.advisor.advisor import _history_hints
+    from advisor_loop.episode import Outcome, QueryResult
+    cv = ConfigVector(**{**CFG, "executor_instances": 4, "executor_memory_gb": 48})
+    h = _history_hints([(cv, Outcome(status="completed", per_query={"q": QueryResult(
+        status="success", duration_ms=50000.0, metrics={})}))]).lower()
+    assert "ainda nao explorou" not in h
+
+
+def test_hints_injected_into_context(tmp_path):
+    j = Journal(tmp_path / "j.jsonl")
+    client = FakeClient([_submit_call()])
+    Advisor(client, j).advise(
+        Episode(workload="w", dataset="sf100", queries=["q23"], provider="m"),
+        "ctx", None, [], history=_hist_scaleout_thin())
+    user_msg = client.last_kwargs["messages"][1]["content"]
+    assert "DICAS:" in user_msg and "poucos executores" in user_msg.lower()

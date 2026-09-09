@@ -11,4 +11,4 @@ datasets: [sf100]
 queries: [q03, q23, q50]
 tries: 1
 max_iters: 8
-patience: 2
+patience: 3

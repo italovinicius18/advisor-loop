@@ -63,13 +63,18 @@ def optimize(episode: Episode, deps: Deps, advisor, max_iters: int = 4,
 
         ok, reason = deps.guardian.validate(rec.config)
         if not ok:
+            # Uma proposta inviavel NAO conta como "sem melhora": e uma rodada
+            # desperdicada, nao um sinal de convergencia. Contar no patience
+            # (como antes) fazia um unico deslize infeasible perto do fim
+            # abortar a exploracao. Segue no historico (o LLM ve que foi
+            # rejeitada) e consome uma iteracao (guard de max_iters), mas nao
+            # avanca no_improve.
             out = Outcome(status="invalid_recommendation")
             history.append((rec.config, out))
-            no_improve += 1
             iterations.append({"iter": i, "config": rec.config.model_dump(),
                                "status": out.status, "duration_ms": None,
                                "durations_ms": [], "samples": 0, "reason": reason})
-            if no_improve >= patience or i == max_iters:
+            if i == max_iters:
                 break
             continue
 
