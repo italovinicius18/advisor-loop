@@ -1,0 +1,22 @@
+# Braco HIBRIDO (k=3, claude-sonnet-5, L0, knobs=matrix3). O LLM ancora
+# (iteracao 1) e re-ancora a cada 3 iteracoes vendo o historico; nas demais um
+# pattern search deterministico refina a melhor config ate agora, um eixo por
+# vez (instancias/memoria/cores, passo 50%->25%->12.5%), com a direcao inicial
+# dirigida pela UTILIZACAO medida (util baixa => encolher primeiro).
+# Par exato de cluster-smoke-sf100-matrix3-sonnet: mesma tudo, so muda o arm
+# -> isola o valor do refino numerico sobre o LLM puro. Motivacao: o modelo
+# diagnostica bem mas calibra mal numeros (r2-r6); o otimizador nao sabe qual
+# benchmark roda (generaliza).
+name: cluster-smoke-sf100-hybrid-sonnet
+mode: optimize
+backend: spark_k8s
+arm: hybrid
+llm_every: 3
+knobs: matrix3
+level: L0
+provider: anthropic/claude-sonnet-5
+datasets: [sf100]
+queries: [q03, q23, q50]
+tries: 3
+max_iters: 8
+patience: 3

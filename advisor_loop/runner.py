@@ -94,8 +94,11 @@ def _run_optimize_campaign(camp: dict, deps: Deps, adv: Advisor) -> dict:
                                     knobs=camp.get("knobs", "free"))
     elif arm == "llm":
         advisor = adv                               # braco principal: Advisor (LLM)
+    elif arm == "hybrid":                           # LLM ancora + pattern search numerico
+        from advisor_loop.advisor.hybrid import HybridAdvisor
+        advisor = HybridAdvisor(adv, deps.guardian, llm_every=camp.get("llm_every", 3))
     else:
-        raise ValueError(f"arm desconhecido: {arm!r} (use 'llm' ou 'random')")
+        raise ValueError(f"arm desconhecido: {arm!r} (use 'llm', 'random' ou 'hybrid')")
     tries = camp.get("tries", 1)
     ran = skipped = 0
     cost = 0.0
