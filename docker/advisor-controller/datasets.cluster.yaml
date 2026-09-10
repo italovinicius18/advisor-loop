@@ -43,7 +43,9 @@ sf100:
   web_site: s3://silver/sf100/delta/parquet/web_site
 spark:
   ssh_cmd: [bash, -c]        # exec local no pod (sem SSH); kubectl usa a SA in-cluster
-  image: ghcr.io/italovinicius18/spark-advisor:4.2.0-delta-r8
+  # r9: driver coleta cpu/run time, tasks/stages, skew e resumo do plano fisico
+  # (sinais de utilizacao + perfil da query na iteracao 0).
+  image: ghcr.io/italovinicius18/spark-advisor:4.2.0-delta-r9
   # Multi-no via nodeAffinity (nao node_selector de no unico): fixar ids-pb (24c)
   # starvava executores e impedia o otimo de q23/q50 (72c/288Gi, exige >= 2 nos)
   # -> regret confundido com o cap do no. O SA namespace-scoped nao pode rotular
