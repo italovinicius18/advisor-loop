@@ -38,6 +38,37 @@ def oracle_table(parquet_path: str) -> dict[tuple[int, str], float]:
     return {(int(sf), str(q)): float(t) for sf, q, t in rows}
 
 
+def oracle_table_median(parquet_path: str) -> dict[tuple[int, str], float]:
+    """Regua JUSTA: min sobre as celulas (cores, mem, workers) da MEDIANA por
+    celula das execucoes success. `oracle_table` (min puro) e o melhor de ~45
+    amostras (15 celulas x 3 tries) e favorece a amostra mais sortuda; o LLM
+    reporta a mediana de k tries por config. Comparar mediana com mediana
+    remove esse vies (no SF100 e de 1-6%: a matriz e estavel -- documentado,
+    nao o que explica o gap).
+
+    Retorna {(sf:int, query:str): t_star_median_ms:float}."""
+    con = duckdb.connect()
+    try:
+        rows = con.execute(
+            """
+            SELECT sf, query, MIN(med) AS t_star_med
+            FROM (
+                SELECT CAST(scale_factor AS INTEGER) AS sf, query,
+                       executor_cores, executor_memory_gb, workers,
+                       MEDIAN(CAST(duration_ms AS DOUBLE)) AS med
+                FROM read_parquet(?)
+                WHERE status = 'success' AND duration_ms IS NOT NULL
+                GROUP BY 1, 2, 3, 4, 5
+            )
+            GROUP BY sf, query
+            """,
+            [parquet_path],
+        ).fetchall()
+    finally:
+        con.close()
+    return {(int(sf), str(q)): float(t) for sf, q, t in rows}
+
+
 def best_config(parquet_path: str, sf: int, query: str) -> dict:
     """Linha vencedora (argmin duration_ms, status='success') para (sf, query).
 

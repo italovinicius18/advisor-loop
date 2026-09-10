@@ -41,7 +41,11 @@ def _sf_of(dataset: str) -> int:
     return int(str(dataset).lower().removeprefix("sf"))
 
 
-def build_report(opt_results: list[dict], oracle: dict[tuple[int, str], float]) -> dict:
+def build_report(opt_results: list[dict], oracle: dict[tuple[int, str], float],
+                 oracle_median: dict[tuple[int, str], float] | None = None) -> dict:
+    """`oracle` = t* min (regua historica); `oracle_median` (opcional) = min das
+    medianas por celula -> `regret_med`, a regua justa mediana-vs-mediana."""
+    oracle_median = oracle_median or {}
     rows = []
     for r in opt_results:
         sf = _sf_of(r["dataset"])
@@ -49,22 +53,27 @@ def build_report(opt_results: list[dict], oracle: dict[tuple[int, str], float]) 
         best = r.get("best_duration_ms")
         base = r.get("baseline_ms")
         t_star = oracle.get((sf, query))
+        t_med = oracle_median.get((sf, query))
         rows.append({
             "dataset": r["dataset"], "sf": sf, "query": query,
             "arm": r.get("arm", "llm"),
             "best_duration_ms": best, "baseline_ms": base, "t_star_ms": t_star,
+            "t_star_median_ms": t_med,
             "regret": regret(best, t_star) if (best is not None and t_star) else None,
+            "regret_med": regret(best, t_med) if (best is not None and t_med) else None,
             "speedup": speedup(base, best) if (base and best) else None,
             "anytime": anytime(r.get("iterations", [])),
         })
     summary: dict[str, dict] = {}
     for arm in sorted({row["arm"] for row in rows}):
-        regs = [row["regret"] for row in rows if row["arm"] == arm and row["regret"] is not None]
-        sps = [row["speedup"] for row in rows if row["arm"] == arm and row["speedup"] is not None]
+        def _med(key):
+            vals = [row[key] for row in rows if row["arm"] == arm and row[key] is not None]
+            return statistics.median(vals) if vals else None
         summary[arm] = {
             "n": sum(1 for row in rows if row["arm"] == arm),
-            "median_regret": statistics.median(regs) if regs else None,
-            "median_speedup": statistics.median(sps) if sps else None,
+            "median_regret": _med("regret"),
+            "median_regret_med": _med("regret_med"),
+            "median_speedup": _med("speedup"),
         }
     return {"rows": rows, "summary": summary}
 
@@ -84,13 +93,14 @@ def _load_opt_results(journal_path: str) -> list[dict]:
 
 def main() -> int:
     import argparse
-    from analysis.oracle import oracle_table
+    from analysis.oracle import oracle_table, oracle_table_median
     ap = argparse.ArgumentParser(prog="advisor-report")
     ap.add_argument("journal", help="journal jsonl da campanha")
     ap.add_argument("matrix", help="parquet da matriz (oraculo)")
     ap.add_argument("--out", help="grava o report json aqui", default=None)
     args = ap.parse_args()
-    rep = build_report(_load_opt_results(args.journal), oracle_table(args.matrix))
+    rep = build_report(_load_opt_results(args.journal), oracle_table(args.matrix),
+                       oracle_table_median(args.matrix))
     text = json.dumps(rep, indent=2, ensure_ascii=False)
     if args.out:
         Path(args.out).write_text(text)

@@ -20,6 +20,23 @@ def test_anytime_skips_none():
     assert anytime(iters) == [200, 200, 150]
 
 
+def test_build_report_with_median_oracle():
+    ors = {(100, "q23"): 100.0}
+    ors_med = {(100, "q23"): 120.0}
+    res = [{"dataset": "sf100", "query": "q23", "arm": "llm", "best_duration_ms": 120.0,
+            "baseline_ms": 240.0, "iterations": [{"duration_ms": 120.0}]}]
+    rep = build_report(res, ors, ors_med)
+    row = rep["rows"][0]
+    assert abs(row["regret"] - 0.2) < 1e-9          # vs min
+    assert abs(row["regret_med"]) < 1e-9            # vs mediana: empatou
+    assert row["t_star_median_ms"] == 120.0
+    assert abs(rep["summary"]["llm"]["median_regret_med"]) < 1e-9
+    # sem oraculo mediano: campos None, nada quebra
+    rep2 = build_report(res, ors)
+    assert rep2["rows"][0]["regret_med"] is None
+    assert rep2["summary"]["llm"]["median_regret_med"] is None
+
+
 def test_build_report():
     ors = {(100, "q23"): 100.0}
     res = [{"dataset": "sf100", "query": "q23", "arm": "llm", "best_duration_ms": 120.0,
