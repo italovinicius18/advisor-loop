@@ -19,7 +19,8 @@ class Deps:
 
 def run_campaign(campaign_path: str | Path, deps: Deps) -> dict:
     camp = yaml.safe_load(Path(campaign_path).read_text())
-    adv = Advisor(deps.client, deps.journal)
+    # knobs: "free" (default, 8 knobs) | "matrix3" (ablacao: so cores/mem/instancias)
+    adv = Advisor(deps.client, deps.journal, knobs=camp.get("knobs", "free"))
     if camp.get("mode") == "optimize":
         return _run_optimize_campaign(camp, deps, adv)
     ran = skipped = 0
@@ -89,7 +90,8 @@ def _run_optimize_campaign(camp: dict, deps: Deps, adv: Advisor) -> dict:
     arm = camp.get("arm", "llm")
     if arm == "random":                             # braco de controle: proposta livre aleatoria
         from advisor_loop.studies.advisors import FreeRandomAdvisor
-        advisor = FreeRandomAdvisor(deps.guardian, seed=camp.get("seed", 0))
+        advisor = FreeRandomAdvisor(deps.guardian, seed=camp.get("seed", 0),
+                                    knobs=camp.get("knobs", "free"))
     elif arm == "llm":
         advisor = adv                               # braco principal: Advisor (LLM)
     else:

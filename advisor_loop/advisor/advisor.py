@@ -19,16 +19,39 @@ def _field_schema(name: str, field) -> dict:
             schema["maximum"] = meta.le
     return schema
 
-_SUBMIT = {
-    "type": "function",
-    "function": {
-        "name": "submit_recommendation",
-        "description": "Envia a configuracao final recomendada.",
-        "parameters": {"type": "object", "additionalProperties": False,
-                       "required": [*ConfigVector.model_fields, "rationale"],
-                       "properties": {**{k: _field_schema(k, f)
-                                         for k, f in ConfigVector.model_fields.items()},
-                                      "rationale": {"type": "string"}}}}}
+def _submit_tool(fields: list[str]) -> dict:
+    return {
+        "type": "function",
+        "function": {
+            "name": "submit_recommendation",
+            "description": "Envia a configuracao final recomendada.",
+            "parameters": {"type": "object", "additionalProperties": False,
+                           "required": [*fields, "rationale"],
+                           "properties": {**{k: _field_schema(k, ConfigVector.model_fields[k])
+                                             for k in fields},
+                                          "rationale": {"type": "string"}}}}}
+
+_SUBMIT = _submit_tool(list(ConfigVector.model_fields))
+
+# Ablacao "matrix3": o LLM so move os 3 eixos que a grade offline varreu
+# (cores x memoria x instancias); os outros 5 ficam PINADOS nos valores fixos da
+# matriz (Spark default; AQE on). Motivacao (journals r5/r6): com schema livre o
+# modelo espalha shuffle_partitions em 100..2000 e advisory em 16..128 -- uma
+# config de forma quase igual ao oraculo (12c x 7w x 56g) ficou 2.4x mais lenta
+# com sp=400/adv=128 vs sp=200/adv=64 da grade. Sem pinar, nao da para separar
+# "erro de forma" de "ruido dos knobs extras" no regret.
+SHAPE_KNOBS = ["executor_cores", "executor_memory_gb", "executor_instances"]
+PINNED_MATRIX = {"driver_memory_gb": 8, "shuffle_partitions": 200,
+                 "advisory_partition_mb": 64, "aqe_enabled": True,
+                 "broadcast_threshold_mb": 10}
+_SUBMIT_MATRIX3 = _submit_tool(SHAPE_KNOBS)
+
+_KNOBS_NOTE = {
+    "matrix3": ("## Knobs ajustaveis NESTA campanha\nSomente executor_cores, "
+                "executor_memory_gb e executor_instances. Os demais estao FIXOS em "
+                + ", ".join(f"{k}={v}" for k, v in PINNED_MATRIX.items())
+                + " (nao os envie)."),
+}
 
 _PROBE_TOOLS = [
     {"type": "function", "function": {"name": "list_tables",
@@ -193,19 +216,29 @@ class Advisor:
     def __init__(self, client, journal: Journal, max_rounds: int = 12,
                  max_tokens: int | None = None,
                  tool_choice: str | dict | None = None,
-                 reasoning: dict | None = None):
+                 reasoning: dict | None = None,
+                 knobs: str = "free"):
         self.client, self.journal, self.max_rounds = client, journal, max_rounds
         self.max_tokens = max_tokens
         # tool_choice/reasoning: passados a cada chat() -> forçam tool call e/ou
         # desligam reasoning para manter o modelo rápido e no protocolo.
         self.tool_choice = tool_choice
         self.reasoning = reasoning
+        # knobs: "free" (8 knobs, schema livre) ou "matrix3" (ablacao: so os 3
+        # eixos da grade; os demais pinados em PINNED_MATRIX).
+        if knobs not in ("free", "matrix3"):
+            raise ValueError(f"knobs desconhecido: {knobs!r} (use 'free' ou 'matrix3')")
+        self.knobs = knobs
+        self._submit = _SUBMIT_MATRIX3 if knobs == "matrix3" else _SUBMIT
+        self._pinned = PINNED_MATRIX if knobs == "matrix3" else {}
 
     def advise(self, ep: Episode, context: str, probe, memories: list[str],
                history: list[tuple[ConfigVector, Outcome]] = []) -> Recommendation:
-        tools = [_SUBMIT] + (_PROBE_TOOLS if probe else [])
+        tools = [self._submit] + (_PROBE_TOOLS if probe else [])
         mem = "\n".join(f"- {m}" for m in memories) or "(sem memorias)"
         user_content = f"{context}\n\n## Memorias de episodios anteriores\n{mem}"
+        if self.knobs in _KNOBS_NOTE:
+            user_content = f"{user_content}\n\n{_KNOBS_NOTE[self.knobs]}"
         if history:
             hints = _history_hints(history)
             user_content = (
@@ -260,7 +293,9 @@ class Advisor:
                 if name == "submit_recommendation":
                     rationale = args.pop("rationale", "")
                     try:
-                        config = ConfigVector(**args)
+                        # pinados por ULTIMO: mesmo que o modelo envie um knob
+                        # fixo (o schema o proibe, mas nao confiamos), ele e sobrescrito.
+                        config = ConfigVector(**{**args, **self._pinned})
                     except pydantic.ValidationError as e:
                         self.journal.append({"kind": "probe", "tool": name, "args": args,
                                              "error": str(e)})

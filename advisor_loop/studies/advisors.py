@@ -115,11 +115,20 @@ class FreeRandomAdvisor:
             "shuffle_partitions": (100, 4000), "advisory_partition_mb": (16, 256),
             "broadcast_threshold_mb": (-1, 512)}
 
-    def __init__(self, guardian, seed: int = 0):
+    def __init__(self, guardian, seed: int = 0, knobs: str = "free"):
         self.guardian = guardian
         self.seed = seed
+        # knobs="matrix3": amostra so os 3 eixos da grade e pina os demais
+        # (mesma ablacao do braco LLM -> controle random pareado).
+        if knobs not in ("free", "matrix3"):
+            raise ValueError(f"knobs desconhecido: {knobs!r} (use 'free' ou 'matrix3')")
+        self.knobs = knobs
 
     def _sample(self, rng) -> ConfigVector:
+        if self.knobs == "matrix3":
+            from advisor_loop.advisor.advisor import PINNED_MATRIX, SHAPE_KNOBS
+            f = {k: rng.randint(*self._INT[k]) for k in SHAPE_KNOBS}
+            return ConfigVector(**f, **PINNED_MATRIX)
         f = {k: rng.randint(lo, hi) for k, (lo, hi) in self._INT.items()}
         f["aqe_enabled"] = rng.random() < 0.5
         return ConfigVector(**f)
