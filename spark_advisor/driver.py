@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import sys
 import time
 
@@ -28,7 +29,12 @@ def build_result(status, duration_ms, metrics, error) -> dict:
 # histórico visto pelo LLM). Puras/testáveis; o listener em si é coberto ao vivo.
 _METRIC_KEYS = ("input_bytes", "output_bytes", "shuffle_read_bytes",
                 "shuffle_write_bytes", "gc_time_ms", "memory_spill_bytes",
-                "disk_spill_bytes", "records_read")
+                "disk_spill_bytes", "records_read",
+                # trabalho real (executor_cpu_time / run_time) + contagem de
+                # stages/tasks: permitem derivar UTILIZACAO = cpu / (cores_tot x
+                # wall), o sinal que calibra paralelismo (query leve com 96 cores
+                # e util ~5% e auto-explicativa). Mesmos campos da matriz offline.
+                "executor_run_time_ms", "executor_cpu_time_ms", "num_tasks", "num_stages")
 
 
 def zero_metrics() -> dict:
@@ -43,9 +49,52 @@ def accumulate(acc: dict, stage: dict) -> dict:
     return acc
 
 
-def _register_metrics_listener(spark, acc):
+def task_stats(durations_ms: list) -> dict:
+    """max/mediana das duracoes de task -> skew (max/mediana alto = straggler;
+    com muitas tasks curtas o overhead de scheduling domina). Puro."""
+    if not durations_ms:
+        return {"max_task_ms": 0, "median_task_ms": 0}
+    s = sorted(int(d or 0) for d in durations_ms)
+    n = len(s)
+    med = s[n // 2] if n % 2 else (s[n // 2 - 1] + s[n // 2]) / 2
+    return {"max_task_ms": int(s[-1]), "median_task_ms": int(med)}
+
+
+# Resumo do plano fisico (mesmas features de plano da matriz offline, onde
+# dominaram o XGBoost): contagem de operadores por NOME exato do operador no
+# inicio da linha (apos os caracteres de arvore `+- :- *(n)`), para nao confundir
+# Sort com SortMergeJoin nem Exchange com BroadcastExchange.
+_PLAN_OP = re.compile(r"^[\s:+\-*()\d]*([A-Za-z]+)")
+_JOINS = {"BroadcastHashJoin", "SortMergeJoin", "ShuffledHashJoin",
+          "BroadcastNestedLoopJoin", "CartesianProduct"}
+_BCAST_JOINS = {"BroadcastHashJoin", "BroadcastNestedLoopJoin"}
+_AGGS = {"HashAggregate", "SortAggregate", "ObjectHashAggregate"}
+_SCANS = {"Scan", "FileScan", "BatchScan"}
+
+
+def plan_summary(plan_text: str) -> dict:
+    """Conta operadores do plano fisico (texto de executedPlan). Puro."""
+    ops = []
+    for line in (plan_text or "").splitlines():
+        m = _PLAN_OP.match(line)
+        if m:
+            ops.append(m.group(1))
+    return {
+        "plan_joins": sum(o in _JOINS for o in ops),
+        "plan_broadcast_joins": sum(o in _BCAST_JOINS for o in ops),
+        "plan_sort_merge_joins": sum(o == "SortMergeJoin" for o in ops),
+        "plan_exchanges": sum(o == "Exchange" for o in ops),
+        "plan_aggregates": sum(o in _AGGS for o in ops),
+        "plan_sorts": sum(o == "Sort" for o in ops),
+        "plan_scans": sum(o in _SCANS for o in ops),
+        "plan_lines": len(ops),
+    }
+
+
+def _register_metrics_listener(spark, acc, task_durs=None):
     """Registra um SparkListener via py4j que acumula taskMetrics por stage em
-    `acc`. Degradação graciosa: se o callback server / addSparkListener falhar,
+    `acc` e, se `task_durs` (lista) for dado, a duracao de cada task em ms.
+    Degradação graciosa: se o callback server / addSparkListener falhar,
     o job segue com métricas zeradas (nunca derruba a execução)."""
     try:
         from py4j.java_gateway import CallbackServerParameters
@@ -75,9 +124,21 @@ def _register_metrics_listener(spark, acc):
                         "gc_time_ms": tm.jvmGCTime(),
                         "memory_spill_bytes": tm.memoryBytesSpilled(),
                         "disk_spill_bytes": tm.diskBytesSpilled(),
+                        "executor_run_time_ms": tm.executorRunTime(),
+                        "executor_cpu_time_ms": tm.executorCpuTime() // 1_000_000,  # ns -> ms
+                        "num_tasks": stageCompleted.stageInfo().numTasks(),
+                        "num_stages": 1,
                     })
                 except Exception as ex:
                     print("ADVISOR_LISTENER_STAGE_ERROR " + str(ex)[:200], flush=True)
+
+            def onTaskEnd(self, taskEnd):
+                if task_durs is None:
+                    return
+                try:
+                    task_durs.append(int(taskEnd.taskInfo().duration()))
+                except Exception as ex:
+                    print("ADVISOR_LISTENER_TASK_ERROR " + str(ex)[:200], flush=True)
 
             def __getattr__(self, name):
                 # o SparkListenerInterface tem ~30 métodos onXxx; os que não
@@ -130,7 +191,8 @@ def main():   # coberto pela validação ao vivo, não por unit test
     spark = SparkSession.builder.appName(f"advisor-{query}-{sf}").getOrCreate()
     # métricas reais coletadas por um SparkListener (acumulador mutado nos callbacks)
     metrics = zero_metrics()
-    _register_metrics_listener(spark, metrics)
+    task_durs: list = []
+    _register_metrics_listener(spark, metrics, task_durs)
     # todas as tabelas TPC-DS (registrar as que existirem na Silver evita
     # a fragilidade de extrair nomes do SQL — joins por virgula/alias)
     TPCDS_TABLES = [
@@ -158,10 +220,21 @@ def main():   # coberto pela validação ao vivo, não por unit test
         # reads de metadata do Delta feitos no registro das views acima.
         for k in list(metrics):
             metrics[k] = 0
+        del task_durs[:]
         t0 = time.time()
-        spark.sql(sql).write.format("noop").mode("overwrite").save()
+        df = spark.sql(sql)
+        df.write.format("noop").mode("overwrite").save()
         dur = (time.time() - t0) * 1000
         _flush_listener_bus(spark)   # garante que os stages do query já contaram
+        metrics.update(task_stats(task_durs))
+        # plano fisico FINAL (com AQE, executedPlan apos a execucao e o plano
+        # adaptado): resumo em contagens no metrics; texto bruto so no stdout.
+        try:
+            plan_txt = df._jdf.queryExecution().executedPlan().toString()
+            metrics.update(plan_summary(plan_txt))
+            print("ADVISOR_PLAN " + plan_txt[:4000].replace("\n", "\\n"), flush=True)
+        except Exception as pe:
+            print("ADVISOR_PLAN_ERROR " + str(pe)[:200], flush=True)
         print(f"ADVISOR_METRICS {json.dumps(metrics)}", flush=True)
         _write_result(build_result("success", round(dur, 1), dict(metrics), None))
     except Exception as e:

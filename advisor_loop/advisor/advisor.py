@@ -137,6 +137,17 @@ def _history_hints(history: list[tuple[ConfigVector, Outcome]]) -> str:
         spill = (m.get("memory_spill_bytes", 0) or 0) + (m.get("disk_spill_bytes", 0) or 0)
         if spill:
             hints.append("Houve spill: aumente memoria por executor ou shuffle_partitions.")
+        u = utilization(best_cv, dur, m)
+        if u is not None and u < 0.3:
+            hints.append(
+                f"UTILIZACAO BAIXA na melhor config ({100 * u:.0f}% dos "
+                f"{best_cv.executor_cores * best_cv.executor_instances} cores totais ocupados): "
+                "a query nao e limitada por CPU -- cortar cores totais nao deve piorar e "
+                "reduz overhead de scheduling/inicializacao. Teste MENOS cores totais.")
+        elif u is not None and u > 0.7:
+            hints.append(
+                f"UTILIZACAO ALTA na melhor config ({100 * u:.0f}%): limitada por CPU -- "
+                "mais cores totais devem reduzir o tempo. Teste MAIS cores totais.")
         # Trust-region + bracketing (TuRBO/OPRO): com uma regiao boa ja conhecida,
         # gastar orcamento refinando LOCALMENTE em torno dela bate saltos aleatorios;
         # e o bracketing dos cores totais ataca direto a falha de calibracao de
@@ -181,9 +192,77 @@ def _derived_signals(cv: ConfigVector, qr) -> str:
     gc = m.get("gc_time_ms") or 0
     if gc and qr.duration_ms:
         parts.append(f"gc/wall={100 * gc / qr.duration_ms:.0f}%")
+    u = utilization(cv, qr.duration_ms, m)
+    if u is not None:
+        parts.append(f"util={100 * u:.0f}%")
+    if m.get("num_tasks"):
+        parts.append(f"tasks={_fmt_count(m['num_tasks'])}")
+    if m.get("max_task_ms") and m.get("median_task_ms"):
+        parts.append(f"skew={m['max_task_ms'] / m['median_task_ms']:.1f}x")
     if m.get("records_read"):
         parts.append(f"rec={_fmt_count(m['records_read'])}")
     return ", ".join(parts)
+
+
+def utilization(cv: ConfigVector, duration_ms, m: dict) -> float | None:
+    """Fracao dos cores totais realmente ocupados com CPU durante o wall:
+    executor_cpu_time / (cores_tot x wall). Baixa (<30%) => a query NAO e limitada
+    por CPU (I/O, latencia, overhead de scheduling) e mais cores nao ajudam."""
+    cpu = (m or {}).get("executor_cpu_time_ms") or 0
+    tc = cv.executor_cores * cv.executor_instances
+    if not cpu or not duration_ms or not tc:
+        return None
+    return cpu / (tc * duration_ms)
+
+
+def render_profile(cv: ConfigVector, duration_ms, m: dict) -> str:
+    """Perfil da query medido na ITERACAO 0 (config default): trabalho total em
+    core-segundos, utilizacao, volume de I/O/shuffle e forma do plano fisico.
+    Da ao LLM o PESO real da query antes da primeira proposta -- e o insumo que
+    faltava para calibrar paralelismo ao peso (super-provisionava a leve,
+    sub-provisionava a pesada). Vem da execucao propria, nunca da matriz."""
+    m = m or {}
+    tc = cv.executor_cores * cv.executor_instances
+    lines = [f"## Perfil da query (iteracao 0, config default "
+             f"{cv.executor_cores}c x {cv.executor_instances}w x {cv.executor_memory_gb}g "
+             f"= {tc} cores totais)"]
+    if duration_ms:
+        lines.append(f"- tempo: {duration_ms / 1000:.1f}s")
+    cpu = m.get("executor_cpu_time_ms") or 0
+    if cpu:
+        work = cpu / 1000
+        lines.append(f"- trabalho de CPU total: {work:.0f} core-segundos "
+                     f"(limite inferior ideal com N cores totais = {work:.0f}/N s)")
+        u = utilization(cv, duration_ms, m)
+        if u is not None:
+            lines.append(f"- utilizacao dos cores no baseline: {100 * u:.0f}%")
+    io = []
+    if m.get("input_bytes"):
+        io.append(f"input={_fmt_bytes(m['input_bytes'])}")
+    if m.get("records_read"):
+        io.append(f"registros={_fmt_count(m['records_read'])}")
+    sh = max(m.get("shuffle_read_bytes") or 0, m.get("shuffle_write_bytes") or 0)
+    if sh:
+        io.append(f"shuffle={_fmt_bytes(sh)}")
+    if io:
+        lines.append("- volume: " + ", ".join(io))
+    if m.get("num_tasks"):
+        t = f"- tasks: {_fmt_count(m['num_tasks'])} em {m.get('num_stages', 0)} stages"
+        if m.get("max_task_ms") and m.get("median_task_ms"):
+            t += (f" (task mediana {m['median_task_ms'] / 1000:.1f}s, "
+                  f"max {m['max_task_ms'] / 1000:.1f}s)")
+        lines.append(t)
+    if m.get("plan_lines"):
+        lines.append(f"- plano fisico: {m.get('plan_joins', 0)} joins "
+                     f"({m.get('plan_broadcast_joins', 0)} broadcast, "
+                     f"{m.get('plan_sort_merge_joins', 0)} sort-merge), "
+                     f"{m.get('plan_exchanges', 0)} shuffles (Exchange), "
+                     f"{m.get('plan_aggregates', 0)} agregacoes, "
+                     f"{m.get('plan_sorts', 0)} sorts, {m.get('plan_scans', 0)} scans")
+    lines.append("Dimensione o paralelismo ao PESO acima: se o trabalho de CPU e pequeno "
+                 "e a utilizacao baixa, muitos cores so adicionam overhead; se o trabalho "
+                 "e grande e a utilizacao alta, mais cores totais reduzem o tempo.")
+    return "\n".join(lines)
 
 
 def render_history(history: list[tuple[ConfigVector, Outcome]]) -> str:

@@ -1,4 +1,5 @@
 import statistics
+from advisor_loop.advisor.advisor import render_profile
 from advisor_loop.episode import ConfigVector, Episode, Outcome, Recommendation
 from advisor_loop.runner import Deps
 
@@ -58,11 +59,18 @@ def optimize(episode: Episode, deps: Deps, advisor, max_iters: int = 4,
     probe = deps.probe_factory(episode) if episode.level in ("L1", "L2") else None
 
     # iteracao 0: baseline default (k tries -> mediana), sem entrar no historico
-    baseline_ms, _bdurs, _bm, _berr = _run_median(
+    baseline_ms, _bdurs, baseline_metrics, _berr = _run_median(
         deps, episode, Recommendation(config=DEFAULT_CFG, rationale="baseline"), tries)
+    # O baseline ja custou k execucoes: aproveita a telemetria dele como PERFIL
+    # da query (trabalho de CPU, utilizacao, volume, plano) no contexto de todas
+    # as iteracoes -- o peso real da query antes da primeira proposta.
+    profile = (render_profile(DEFAULT_CFG, baseline_ms, baseline_metrics)
+               if baseline_ms is not None else "")
 
     for i in range(1, max_iters + 1):
         context = deps.pack.render(episode)
+        if profile:
+            context = f"{context}\n\n{profile}"
         mems = deps.memory.retrieve(episode) if hasattr(deps.memory, "retrieve") else []
         rec = advisor.advise(episode, context, probe, mems, history=history)
 
@@ -124,5 +132,6 @@ def optimize(episode: Episode, deps: Deps, advisor, max_iters: int = 4,
     return {"best_config": best_config.model_dump() if best_config else None,
             "best_duration_ms": best_dur,
             "baseline_ms": baseline_ms,
+            "baseline_metrics": baseline_metrics,
             "iterations": iterations,
             "history_len": len(history)}
