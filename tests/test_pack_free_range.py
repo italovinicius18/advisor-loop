@@ -31,3 +31,7 @@ def test_feasibility_block_states_arithmetic_and_coverage():
     assert "executor_memory_gb * executor_instances" in txt
     # nudge de cobertura: os dois extremos do formato de executor
     assert "muitos executores" in low and "poucos executores" in low
+    # refinamento shuffle-aware: dois eixos (cores totais vs memoria/tarefa) e
+    # otimo MODERADO -- nao empurra monotonicamente para few-fat
+    assert "cores totais" in low and "moderado" in low
+    assert "tarefas concorrentes por heap" in low

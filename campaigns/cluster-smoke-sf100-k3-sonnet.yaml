@@ -1,0 +1,17 @@
+# Denoised (k=3) model-audit arm: claude-sonnet-5 + shuffle-aware nudge.
+# The k=1 smokes could not rank models -- single-sample variance swamped the
+# signal (a near-oracle q50 config scored 2.6x oracle with a near-flat baseline).
+# k=3 medians denoise per (SF,query), as the spec prescribes for the falsifiable
+# campaign ("variance swamped the SF1 pilot"). Holds context constant (refined
+# shuffle-aware packs) and varies only the model vs cluster-smoke-sf100-k3-deepseek.
+name: cluster-smoke-sf100-k3-sonnet
+mode: optimize
+backend: spark_k8s
+arm: llm
+level: L0
+provider: anthropic/claude-sonnet-5
+datasets: [sf100]
+queries: [q03, q23, q50]
+tries: 3
+max_iters: 8
+patience: 3

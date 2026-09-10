@@ -6,11 +6,11 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: advisor-controller-smoke
+  name: advisor-controller-signals
   namespace: italo-unb
   labels:
     app: advisor-controller
-    campaign: cluster-smoke-sf100
+    campaign: cluster-smoke-sf100-signals-sonnet
 spec:
   serviceAccountName: ns-admin
   restartPolicy: Never
@@ -22,13 +22,13 @@ spec:
     kubernetes.io/hostname: ids-pb        # egress (OpenRouter/GHCR) + imagem cacheada
   containers:
     - name: controller
-      image: ghcr.io/italovinicius18/advisor-controller:sf100-r3
+      image: ghcr.io/italovinicius18/advisor-controller:sf100-r6
       imagePullPolicy: Always
       env:
         - name: CAMPAIGN
-          value: campaigns/cluster-smoke-sf100.yaml
+          value: campaigns/cluster-smoke-sf100-signals-sonnet.yaml
         - name: RESULT_PREFIX
-          value: smoke-sf100-ctx
+          value: smoke-sf100-signals-sonnet
         - name: OPENROUTER_API_KEY
           valueFrom:
             secretKeyRef:

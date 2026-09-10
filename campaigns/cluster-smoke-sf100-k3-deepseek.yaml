@@ -1,0 +1,14 @@
+# Denoised (k=3) baseline arm: deepseek-v4-flash + shuffle-aware nudge.
+# Same refined context as cluster-smoke-sf100-k3-sonnet; varies only the model,
+# so the two runs isolate model capability (context held constant) at k=3.
+name: cluster-smoke-sf100-k3-deepseek
+mode: optimize
+backend: spark_k8s
+arm: llm
+level: L0
+provider: deepseek/deepseek-v4-flash-0731
+datasets: [sf100]
+queries: [q03, q23, q50]
+tries: 3
+max_iters: 8
+patience: 3

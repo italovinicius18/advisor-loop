@@ -49,6 +49,14 @@ def _fmt_bytes(n) -> str:
         n /= 1024
 
 
+def _fmt_count(n) -> str:
+    n = float(n or 0)
+    for unit in ("", "K", "M", "B"):
+        if n < 1000 or unit == "B":
+            return f"{n:.0f}{unit}"
+        n /= 1000
+
+
 def fmt_metrics(m: dict) -> str:
     """Resumo compacto das métricas reais (só campos não-zero) para o histórico
     do LLM - dá sinais causais (shuffle/spill/gc) além do tempo puro."""
@@ -70,12 +78,15 @@ def fmt_metrics(m: dict) -> str:
 
 
 def _history_hints(history: list[tuple[ConfigVector, Outcome]]) -> str:
-    """Dicas causais derivadas do historico desta query -- ataca o modo de falha
-    visto no smoke: o LLM ficou preso no quadrante scale-out (muitos executores
-    finos) e nunca amostrou a regiao do otimo do grid (poucos executores com
-    memoria grande). (1) se a MELHOR config teve GC/spill alto, empurra para
-    menos executores com mais memoria; (2) nudge de COBERTURA: lista o que ja
-    foi testado e aponta a direcao ainda nao explorada."""
+    """Dicas causais derivadas do historico desta query. O smoke k=1 mostrou
+    DOIS modos de falha opostos: deepseek saturou no extremo few-fat (24c no cap,
+    heaps enormes) e sonnet sub-paralelizou uma query shuffle-heavy (q50). Logo o
+    nudge NAO e monotono "menos executores + mais memoria": (1) se a MELHOR config
+    teve GC alto, diagnostica concorrencia-por-heap (reduzir executor_cores, nao o
+    numero de executores) e, em query shuffle-heavy, pede para PRESERVAR os cores
+    totais; (2) spill -> mais memoria/particoes; (3) COBERTURA: lista o que ja foi
+    testado (instancias, cores/exec, memoria) e aponta direcoes moderadas ainda
+    nao exploradas, sem empurrar para o extremo."""
     succ = [(cv, qr) for cv, o in history
             for qr in [next((q for q in o.per_query.values()
                              if q.status == "success" and q.duration_ms is not None), None)]
@@ -86,42 +97,95 @@ def _history_hints(history: list[tuple[ConfigVector, Outcome]]) -> str:
         m = best_qr.metrics or {}
         gc = m.get("gc_time_ms", 0) or 0
         dur = best_qr.duration_ms or 0
+        shuffle = max(m.get("shuffle_read_bytes", 0) or 0,
+                      m.get("shuffle_write_bytes", 0) or 0)
+        heavy_shuffle = shuffle >= 1 * 1024 ** 3  # >=1GB => limitada por paralelismo
         if gc and dur and gc >= 0.25 * dur:
-            hints.append(f"GC domina a melhor config ate agora (gc={gc:g}ms vs "
-                         f"wall={dur:g}ms, {best_cv.executor_instances}x{best_cv.executor_memory_gb}g): "
-                         "prefira MENOS executores com MAIS memoria cada (nao mais executores finos).")
+            tip = (f"GC domina a melhor config ate agora (gc={gc:g}ms vs wall={dur:g}ms, "
+                   f"{best_cv.executor_cores}c x {best_cv.executor_instances}w x "
+                   f"{best_cv.executor_memory_gb}g): GC vem tipicamente de tarefas "
+                   "concorrentes demais por heap. Reduza executor_cores por executor e/ou "
+                   "aumente executor_memory_gb (nao sature executor_cores no maximo).")
+            if heavy_shuffle:
+                tip += (f" Esta query e pesada em shuffle ({_fmt_bytes(shuffle)}): NAO "
+                        "derrube os cores totais (paralelismo) -- se cortar cores por "
+                        "executor, compense com mais executores e/ou aumente shuffle_partitions.")
+            hints.append(tip)
         spill = (m.get("memory_spill_bytes", 0) or 0) + (m.get("disk_spill_bytes", 0) or 0)
         if spill:
             hints.append("Houve spill: aumente memoria por executor ou shuffle_partitions.")
+        # Trust-region + bracketing (TuRBO/OPRO): com uma regiao boa ja conhecida,
+        # gastar orcamento refinando LOCALMENTE em torno dela bate saltos aleatorios;
+        # e o bracketing dos cores totais ataca direto a falha de calibracao de
+        # paralelismo (achar o joelho da curva tempo x cores totais).
+        tc = best_cv.executor_cores * best_cv.executor_instances
+        hints.append(
+            f"MELHOR ate agora: {best_cv.executor_cores}c x {best_cv.executor_instances}w "
+            f"= {tc} cores totais ({best_qr.duration_ms:g}ms). Faca BUSCA LOCAL em torno dela: "
+            "mude UM eixo por vez em passos pequenos (~25-50%), nao salte para configs distantes. "
+            f"Para calibrar o paralelismo, faca BRACKETING dos cores totais: proponha uma config "
+            f"com MAIS que {tc} cores totais e, noutra iteracao, uma com MENOS cores totais, para "
+            "achar o joelho da curva tempo x cores totais.")
     if history:
         inst = sorted({cv.executor_instances for cv, _ in history})
         mem = sorted({cv.executor_memory_gb for cv, _ in history})
-        cov = f"Ja testou executor_instances={inst} e memory_gb/exec={mem}."
+        cores = sorted({cv.executor_cores for cv, _ in history})
+        cov = (f"Ja testou executor_instances={inst}, cores/exec={cores} e "
+               f"memory_gb/exec={mem}.")
         gaps = []
         if inst and min(inst) > 4:
             gaps.append("poucos executores (ex.: 4-8)")
         if mem and max(mem) < 48:
-            gaps.append("memoria alta por executor (ex.: 48-96g)")
+            gaps.append("memoria alta por executor (ex.: 48-64g)")
+        if cores and min(cores) >= 24:
+            gaps.append("cores/exec moderados (ex.: 8-12) mantendo os cores totais")
         if gaps:
             cov += " Ainda NAO explorou: " + " e ".join(gaps) + " -- experimente na proxima."
         hints.append(cov)
     return " ".join(hints)
 
 
+def _derived_signals(cv: ConfigVector, qr) -> str:
+    """Sinais derivados que o LLM sozinho erra ao raciocinar em prosa: paralelismo
+    total (cores_tot = cores/exec * instancias), memoria por tarefa (mem/core) e a
+    fracao de GC sobre o wall. Expor esses numeros ao lado do tempo torna EXPLICITA
+    a relacao paralelismo<->tempo que o modelo nao calibra (super-provisiona query
+    leve, sub-provisiona query pesada)."""
+    tc = cv.executor_cores * cv.executor_instances
+    mpc = cv.executor_memory_gb / cv.executor_cores
+    parts = [f"cores_tot={tc}", f"mem/core={mpc:.1f}g"]
+    m = qr.metrics or {}
+    gc = m.get("gc_time_ms") or 0
+    if gc and qr.duration_ms:
+        parts.append(f"gc/wall={100 * gc / qr.duration_ms:.0f}%")
+    if m.get("records_read"):
+        parts.append(f"rec={_fmt_count(m['records_read'])}")
+    return ", ".join(parts)
+
+
 def render_history(history: list[tuple[ConfigVector, Outcome]]) -> str:
-    """Uma linha por iteracao anterior desta query: config + duracao + metricas
-    reais (sucesso) ou status (falha, ex.: oom) - realimenta o advisor com
-    resultados reais (tempo E shuffle/spill/gc) em vez de adivinhar as cegas."""
-    lines = []
-    for i, (cv, outcome) in enumerate(history, start=1):
-        prefix = (f"iter {i}: {cv.executor_cores}c/{cv.executor_memory_gb}g/"
-                  f"{cv.executor_instances}w")
+    """Trajetoria realimentada ao advisor, formatada estilo OPRO (Yang et al.,
+    ICLR 2024): as execucoes com SUCESSO vem ORDENADAS por tempo (pior -> melhor),
+    de modo que a MELHOR config fique por ULTIMO (mais perto do ponto de geracao) e
+    o modelo infira a direcao de melhora a partir do ranking, em vez de ler uma
+    ordem cronologica sem sinal. Cada linha carrega config + sinais derivados
+    (cores totais, mem/core, gc/wall) + metricas reais (shuffle/spill/gc). As falhas
+    vem antes, agrupadas, para nao poluir o ranking dos sucessos."""
+    def prefix(cv):
+        return f"{cv.executor_cores}c/{cv.executor_memory_gb}g/{cv.executor_instances}w"
+    succ, fail = [], []
+    for cv, outcome in history:
         qr = next((q for q in outcome.per_query.values()
                    if q.status == "success" and q.duration_ms is not None), None)
-        if qr is not None:
-            lines.append(f"{prefix} → {qr.duration_ms:g}ms{fmt_metrics(qr.metrics)}")
-        else:
-            lines.append(f"{prefix} → {outcome.status}")
+        (succ if qr is not None else fail).append((cv, outcome, qr))
+    lines = [f"{prefix(cv)} → {outcome.status}" for cv, outcome, _ in fail]
+    succ.sort(key=lambda t: t[2].duration_ms, reverse=True)  # pior primeiro, melhor por ultimo
+    for cv, _, qr in succ:
+        lines.append(f"{prefix(cv)} ({_derived_signals(cv, qr)}) → "
+                     f"{qr.duration_ms:g}ms{fmt_metrics(qr.metrics)}")
+    if succ:
+        lines.append("(acima: ordenado do PIOR ao MELHOR tempo; a ULTIMA linha e a "
+                     "melhor config ate agora -- proponha uma que a supere.)")
     return "\n".join(lines)
 
 

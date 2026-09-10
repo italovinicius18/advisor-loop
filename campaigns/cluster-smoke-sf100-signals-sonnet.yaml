@@ -1,0 +1,18 @@
+# Online-signals smoke (k=1, claude-sonnet-5). Controle vs r4 (cluster-smoke-
+# sf100-sonnet, k=1 sonnet, regret mediano 1.592): MESMO modelo, nivel, tries e
+# budget -- varia SOMENTE os incrementos matrix-free no advisor:
+#   (A) trajetoria ordenada por score, melhor por ultimo (estilo OPRO);
+#   (B) telemetria reingerida com sinais derivados (cores_tot, mem/core, gc/wall, rec);
+#   (D) nudge de busca local + bracketing dos cores totais (calibracao de paralelismo).
+# A matriz offline permanece ISOLADA como regua -- nada dela entra no contexto.
+name: cluster-smoke-sf100-signals-sonnet
+mode: optimize
+backend: spark_k8s
+arm: llm
+level: L0
+provider: anthropic/claude-sonnet-5
+datasets: [sf100]
+queries: [q03, q23, q50]
+tries: 1
+max_iters: 8
+patience: 3
