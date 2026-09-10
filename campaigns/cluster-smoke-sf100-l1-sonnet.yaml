@@ -1,0 +1,22 @@
+# L1 tool-calling smoke (k=3, claude-sonnet-5). Liga a SONDAGEM do dataset: o
+# advisor ganha as tools list_tables/table_stats/sample_query (advise() ja as
+# implementa) contra o servico DuckDB in-cluster (RemoteDuckDBProbe -> MinIO).
+# Hipotese: vendo os TAMANHOS REAIS das tabelas, o LLM deixa de super-provisionar
+# a query leve (q03 toca tabelas pequenas; oraculo = muitos executores minusculos)
+# e calibra o paralelismo ao peso real -> fecha o residuo maior do regret.
+#
+# Contraste: MESMO modelo/queries/budget do r6 (sinais online, ja na main), so
+# muda level L0->L1 (probe ligado) e tries 1->3 (k=3 denoised, escolha do usuario).
+# O gate de nivel em loop.py garante que L0 continua sem probe. A matriz offline
+# permanece ISOLADA -- o probe le o DADO real, nunca a matriz.
+name: cluster-smoke-sf100-l1-sonnet
+mode: optimize
+backend: spark_k8s
+arm: llm
+level: L1
+provider: anthropic/claude-sonnet-5
+datasets: [sf100]
+queries: [q03, q23, q50]
+tries: 3
+max_iters: 8
+patience: 3

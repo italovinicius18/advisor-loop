@@ -100,6 +100,45 @@ def test_invalid_recommendation_does_not_crash_and_continues(tmp_path):
     assert r["best_duration_ms"] == 3000
 
 
+class ProbeCapturingAdvisor:
+    """Registra o probe recebido em cada advise -> checa o gate de nivel."""
+    def __init__(self):
+        self.probes = []
+    def advise(self, ep, ctx, probe, mems, history=None):
+        self.probes.append(probe)
+        return Recommendation(rationale="", config=ConfigVector(**CFG))
+
+
+def _deps_probe(tmp_path, backend, sentinel):
+    from advisor_loop.runner import Deps
+    return Deps(client=None, journal=Journal(tmp_path / "j.jsonl"), pack=Pack(),
+                guardian=Guardian(CLUSTER), backend=backend,
+                memory=MemoryStore(tmp_path / "m.jsonl"),
+                probe_factory=lambda ep: sentinel)
+
+
+def test_probe_gated_off_at_L0(tmp_path):
+    """Em L0 o laco passa probe=None ao advisor MESMO que o probe_factory
+    devolva um probe (o datasets.yaml pode carregar probe_service): o nivel e
+    autoritativo sobre a sondagem."""
+    sentinel = object()
+    ep = Episode(workload="w", dataset="sf1", queries=["q03"], provider="m", level="L0")
+    adv = ProbeCapturingAdvisor()
+    optimize(ep, _deps_probe(tmp_path, ScriptBackend([9000, 4000]), sentinel),
+             adv, max_iters=1, patience=2)
+    assert adv.probes == [None]
+
+
+def test_probe_passed_at_L1(tmp_path):
+    """Em L1 o laco constroi o probe via probe_factory e o passa ao advisor."""
+    sentinel = object()
+    ep = Episode(workload="w", dataset="sf1", queries=["q03"], provider="m", level="L1")
+    adv = ProbeCapturingAdvisor()
+    optimize(ep, _deps_probe(tmp_path, ScriptBackend([9000, 4000]), sentinel),
+             adv, max_iters=1, patience=2)
+    assert adv.probes == [sentinel]
+
+
 class NBadThenGoodAdvisor:
     """As primeiras `bad` iteracoes propoem config inviavel; depois, validas."""
     def __init__(self, bad):

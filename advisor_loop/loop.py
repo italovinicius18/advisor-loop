@@ -50,7 +50,12 @@ def optimize(episode: Episode, deps: Deps, advisor, max_iters: int = 4,
     best_dur = None
     no_improve = 0
     iterations: list[dict] = []
-    probe = deps.probe_factory(episode)
+    # O nivel da campanha e autoritativo sobre a sondagem (igual ao caminho
+    # single-shot em runner.py): so L1/L2 recebem probe. Sem este gate, o
+    # probe_factory seria chamado incondicionalmente e bastaria o bloco
+    # probe_service no datasets.yaml para LIGAR a sondagem em qualquer campanha
+    # optimize -- poluindo o contraste cientifico L0 (r6) vs L1.
+    probe = deps.probe_factory(episode) if episode.level in ("L1", "L2") else None
 
     # iteracao 0: baseline default (k tries -> mediana), sem entrar no historico
     baseline_ms, _bdurs, _bm, _berr = _run_median(

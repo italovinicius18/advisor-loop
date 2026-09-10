@@ -10,6 +10,12 @@ s3:
   secret: minioadmin
   use_ssl: false
   url_style: path
+probe_service:
+  # Nivel L1: o advisor sonda o dataset via servico DuckDB in-cluster
+  # (kubernetes/duckdb-probe-service.yaml, RemoteDuckDBProbe). MESMO motivo do
+  # MinIO: o controller roda em ids-pb (NXDOMAIN p/ *.cluster.local), entao o
+  # ClusterIP do svc duckdb-probe entra por IP, nao pelo nome DNS.
+  url: http://10.50.197.129:8000
 sf100:
   call_center: s3://silver/sf100/delta/parquet/call_center
   catalog_page: s3://silver/sf100/delta/parquet/catalog_page

@@ -32,12 +32,12 @@ spec:
       # disable token automount too: even the default SA's token is a
       # target not worth mounting into a pod that only talks to MinIO.
       automountServiceAccountToken: false
-      # If the GHCR package is private, uncomment and provide a docker-registry
-      # secret named ghcr-pull in this namespace; public packages need none.
-      # imagePullSecrets: [{name: ghcr-pull}]
+      # GHCR package is private -> pull via the namespace secret ghcr-pull
+      # (same secret the controller uses; ghcr.io-only dockerconfigjson).
+      imagePullSecrets: [{name: ghcr-pull}]
       containers:
       - name: duckdb-probe
-        image: ghcr.io/italovinicius18/advisor-duckdb-probe:PLACEHOLDER   # controller substitutes the real tag
+        image: ghcr.io/italovinicius18/advisor-duckdb-probe:sf100
         imagePullPolicy: Always
         ports:
         - containerPort: 8000
