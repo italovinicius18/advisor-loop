@@ -40,7 +40,8 @@ class SparkSubmitter:
         # popula .stdout, entao so a execucao real expunha esse buraco.
         return self.runner(self.ssh_cmd + [remote_cmd], capture_output=True, text=True)
 
-    def submit(self, config: ConfigVector, sf: str, query: str, run_id: str) -> dict:
+    def submit(self, config: ConfigVector, sf: str, query: str, run_id: str,
+               tries: int = 1) -> dict:
         # deploy-mode cluster: o pod launcher roda spark-submit (bloqueante via
         # waitAppCompletion) e CRIA um pod driver separado. O marcador
         # ADVISOR_RESULT sai no stdout do DRIVER, nao do launcher.
@@ -50,7 +51,8 @@ class SparkSubmitter:
         manifest = render_launcher(config, sf, query, run_id, self.image, result_s3,
                                    node_selector=self.node_selector,
                                    pod_template_file=self.pod_template_file,
-                                   node_affinity_hostnames=self.node_affinity_hostnames)
+                                   node_affinity_hostnames=self.node_affinity_hostnames,
+                                   tries=tries)
 
         try:
             apply_result = self._run(f"cat <<'EOF' | kubectl apply -f -\n{manifest}\nEOF")

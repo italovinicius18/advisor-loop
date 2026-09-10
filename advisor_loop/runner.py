@@ -94,11 +94,14 @@ def _run_optimize_campaign(camp: dict, deps: Deps, adv: Advisor) -> dict:
                                     knobs=camp.get("knobs", "free"))
     elif arm == "llm":
         advisor = adv                               # braco principal: Advisor (LLM)
+    elif arm == "fixed":                            # replay de configs fixas (oraculo no harness)
+        from advisor_loop.studies.advisors import PerQueryFixedAdvisor
+        advisor = PerQueryFixedAdvisor(camp.get("configs") or {}, camp.get("config"))
     elif arm == "hybrid":                           # LLM ancora + pattern search numerico
         from advisor_loop.advisor.hybrid import HybridAdvisor
         advisor = HybridAdvisor(adv, deps.guardian, llm_every=camp.get("llm_every", 3))
     else:
-        raise ValueError(f"arm desconhecido: {arm!r} (use 'llm', 'random' ou 'hybrid')")
+        raise ValueError(f"arm desconhecido: {arm!r} (use 'llm', 'random', 'hybrid' ou 'fixed')")
     tries = camp.get("tries", 1)
     ran = skipped = 0
     cost = 0.0

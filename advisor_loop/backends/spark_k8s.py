@@ -16,6 +16,10 @@ class SparkK8sBackend:
     resultados para Outcome. Consumes SparkSubmitter.submit() e produz
     QueryResult + Outcome com status agregado e wall_clock_s somado."""
 
+    # O driver roda `tries` execucoes NA MESMA SESSAO (1 spark-submit por config,
+    # protocolo quente); o loop chama execute() UMA vez com tries=k.
+    in_session_tries = True
+
     def __init__(self, submitter, run_id_fn=None):
         self.submitter = submitter
         self.run_id_fn = run_id_fn or self._default_run_id_fn
@@ -24,21 +28,24 @@ class SparkK8sBackend:
         """Gera run_id padrão a partir de uuid4."""
         return str(uuid.uuid4())[:8]
 
-    def execute(self, ep: Episode, rec: Recommendation) -> Outcome:
+    def execute(self, ep: Episode, rec: Recommendation, tries: int = 1) -> Outcome:
         per_query = {}
         total_wall_clock_ms = 0.0
         outcome_status = "completed"
 
         for query in ep.queries:
             run_id = self.run_id_fn()
-            result_dict = self.submitter.submit(rec.config, ep.dataset, query, run_id)
+            result_dict = self.submitter.submit(rec.config, ep.dataset, query, run_id,
+                                                tries=tries)
 
             # Map dict to QueryResult
             query_result = QueryResult(
                 status=result_dict.get("status", "failed"),
                 duration_ms=result_dict.get("duration_ms"),
                 error=result_dict.get("error"),
-                metrics=result_dict.get("metrics", {})
+                metrics=result_dict.get("metrics", {}),
+                durations_ms=result_dict.get("durations_ms"),
+                cold_ms=result_dict.get("cold_ms"),
             )
             per_query[query] = query_result
 

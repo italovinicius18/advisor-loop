@@ -12,7 +12,8 @@ FIXED_CONFS = [
 def render_launcher(config: ConfigVector, sf: str, query: str, run_id: str,
                      image: str, result_s3: str, node_selector: dict | None = None,
                      pod_template_file: str | None = None,
-                     node_affinity_hostnames: list[str] | None = None) -> str:
+                     node_affinity_hostnames: list[str] | None = None,
+                     tries: int = 1, warmup: int = 1) -> str:
     driver_pod = f"advisor-{run_id}-driver"
     # targeting de no opcional. Duas vias mutuamente exclusivas:
     #  - node_selector (igualdade): fixa driver+executors num UNICO no conhecido
@@ -39,6 +40,9 @@ def render_launcher(config: ConfigVector, sf: str, query: str, run_id: str,
         "--conf", f"spark.kubernetes.driverEnv.SF={sf}",
         "--conf", f"spark.kubernetes.driverEnv.QUERY={query}",
         "--conf", f"spark.kubernetes.driverEnv.RUN_ID={run_id}",
+        # tries em sessao + warm-up: protocolo quente (ver driver.py)
+        "--conf", f"spark.kubernetes.driverEnv.TRIES={tries}",
+        "--conf", f"spark.kubernetes.driverEnv.WARMUP={warmup}",
         "--conf", f"spark.kubernetes.driverEnv.RESULT_S3={result_s3}",
         "--conf", "spark.kubernetes.driverEnv.MINIO_ENDPOINT=http://minio:9000",
         "--conf", "spark.kubernetes.driverEnv.MINIO_ACCESS_KEY=minioadmin",
@@ -101,6 +105,8 @@ def render_launcher(config: ConfigVector, sf: str, query: str, run_id: str,
                         {"name": "SF", "value": sf},
                         {"name": "QUERY", "value": query},
                         {"name": "RUN_ID", "value": run_id},
+                        {"name": "TRIES", "value": str(tries)},
+                        {"name": "WARMUP", "value": str(warmup)},
                         {"name": "RESULT_S3", "value": result_s3},
                         {"name": "MINIO_ENDPOINT", "value": "http://minio:9000"},
                         {"name": "MINIO_ACCESS_KEY", "value": "minioadmin"},

@@ -20,6 +20,19 @@ def _run_median(deps: Deps, ep: Episode, rec: Recommendation, tries: int):
     {"query_status", "error"} da ultima execucao sem sucesso, para o journal
     registrar POR QUE a proposta falhou (timeout/oom/erro de query) em vez de um
     "error" mudo -- sem isso, q23/q50 no smoke gravaram error sem diagnostico."""
+    if getattr(deps.backend, "in_session_tries", False):
+        # Backend que roda os k tries NA MESMA SESSAO (SparkK8sBackend): uma
+        # unica submissao; o driver ja devolve a mediana dos runs quentes e a
+        # lista de duracoes. cold_ms (1a execucao fria) vai no metrics para o
+        # journal registrar o custo fixo do harness.
+        out = deps.backend.execute(ep, rec, tries=tries)
+        qr = next(iter(out.per_query.values()))
+        if qr.status == "success" and qr.duration_ms is not None:
+            m = dict(qr.metrics or {})
+            if qr.cold_ms is not None:
+                m["cold_ms"] = qr.cold_ms
+            return qr.duration_ms, list(qr.durations_ms or [qr.duration_ms]), m, None
+        return None, [], {}, {"query_status": qr.status, "error": qr.error}
     durs: list[float] = []
     metrics_by: dict[float, dict] = {}
     err: dict | None = None

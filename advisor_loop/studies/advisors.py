@@ -84,6 +84,23 @@ class FixedAdvisor:
         return Recommendation(config=self.config, rationale="A0 fixed best-on-average")
 
 
+class PerQueryFixedAdvisor:
+    """Replay de configs FIXAS por query (ex.: a celula vencedora da matriz),
+    para medir o proprio harness contra o oraculo: se a config do oraculo
+    reproduz t* aqui, o regret e real; se nao, e overhead do harness."""
+
+    def __init__(self, configs: dict[str, dict], default: dict | None = None):
+        self.configs, self.default = configs, default
+
+    def advise(self, ep: Episode, context: str, probe, memories: list[str],
+               history: list = []) -> Recommendation:
+        raw = self.configs.get(ep.queries[0], self.default)
+        if raw is None:
+            raise ValueError(f"sem config fixa para {ep.queries[0]}")
+        return Recommendation(config=ConfigVector(**raw),
+                              rationale=f"fixed replay {ep.queries[0]}")
+
+
 class RandomAdvisor:
     """A1 — busca aleatória sobre a grade. Embaralhamento determinístico por
     episódio (seed + dataset + query); o índice vem de len(history), então não
