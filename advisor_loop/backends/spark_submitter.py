@@ -60,11 +60,16 @@ class SparkSubmitter:
                 return {"status": "failed", "duration_ms": None, "metrics": {},
                         "error": f"apply failed: {apply_result.stdout}"}
 
-            phase = self._poll(launcher_pod)
+            # Com tries em sessao o pod roda (warmup + tries) execucoes: o teto
+            # de wall clock escala junto, senao um baseline lento (q23 default
+            # 1 executor: ~350s x 4) estoura os 1200s e vira timeout -> baseline
+            # None (aconteceu no replay do oraculo).
+            phase = self._poll(launcher_pod, self.max_wall_clock_s * max(1, tries + 1))
 
             if phase == "timeout":
                 return {"status": "failed", "duration_ms": None, "metrics": {},
-                        "error": f"timeout waiting for pod {launcher_pod} (>{self.max_wall_clock_s}s)"}
+                        "error": f"timeout waiting for pod {launcher_pod} "
+                                 f"(>{self.max_wall_clock_s * max(1, tries + 1)}s)"}
 
             # logs do DRIVER carregam o ADVISOR_RESULT; fallback p/ launcher se o
             # driver nem chegou a ser criado (ex.: erro de submit/imagem no launcher).
@@ -87,7 +92,8 @@ class SparkSubmitter:
         finally:
             self._run(f"kubectl delete pod {launcher_pod} {driver_pod} --ignore-not-found")
 
-    def _poll(self, pod_name: str) -> str:
+    def _poll(self, pod_name: str, budget_s: float | None = None) -> str:
+        budget_s = self.max_wall_clock_s if budget_s is None else budget_s
         elapsed = 0.0
         while True:
             phase = self._run(
@@ -95,7 +101,7 @@ class SparkSubmitter:
             ).stdout.strip()
             if phase in TERMINAL_PHASES:
                 return phase
-            if elapsed >= self.max_wall_clock_s:
+            if elapsed >= budget_s:
                 return "timeout"
             time.sleep(self.poll_interval_s)
             elapsed += self.poll_interval_s
