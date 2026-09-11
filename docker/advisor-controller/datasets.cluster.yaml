@@ -45,7 +45,7 @@ spark:
   ssh_cmd: [bash, -c]        # exec local no pod (sem SSH); kubectl usa a SA in-cluster
   # r10: tries em sessao + warm-up (harness quente); r9: driver coleta cpu/run time, tasks/stages, skew e resumo do plano fisico
   # (sinais de utilizacao + perfil da query na iteracao 0).
-  image: ghcr.io/italovinicius18/spark-advisor:4.2.0-delta-r10
+  image: ghcr.io/italovinicius18/spark-advisor:4.2.0-delta-r11
   # Multi-no via nodeAffinity (nao node_selector de no unico): fixar ids-pb (24c)
   # starvava executores e impedia o otimo de q23/q50 (72c/288Gi, exige >= 2 nos)
   # -> regret confundido com o cap do no. O SA namespace-scoped nao pode rotular
@@ -54,4 +54,4 @@ spark:
   # espelha a MESMA lista p/ o pod launcher (que nao le o arquivo assado).
   # Pool de egress = nos que puxam a imagem do GHCR e roteiam o MinIO.
   pod_template_file: /opt/advisor/pod-template-egress.yaml
-  node_affinity_hostnames: [ids-es, ids-rn, ids-pb]
+  node_affinity_hostnames: [ids-es, ids-rn, ids-pb, ids-go]   # ids-go = MinIO (colocation)

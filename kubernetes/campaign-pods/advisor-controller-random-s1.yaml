@@ -1,0 +1,33 @@
+# Controle random-8 k=3, seed 1 (variancia do controle).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: advisor-controller-random-s1
+  namespace: italo-unb
+  labels:
+    app: advisor-controller
+    campaign: cluster-smoke-sf100-random-k3-s1
+spec:
+  serviceAccountName: ns-admin
+  restartPolicy: Never
+  imagePullSecrets:
+    - name: ghcr-pull
+  nodeSelector:
+    kubernetes.io/hostname: ids-pb
+  containers:
+    - name: controller
+      image: ghcr.io/italovinicius18/advisor-controller:sf100-r11
+      imagePullPolicy: Always
+      env:
+        - name: CAMPAIGN
+          value: campaigns/cluster-smoke-sf100-random-k3-s1.yaml
+        - name: RESULT_PREFIX
+          value: smoke-sf100-random-k3-s1
+        - name: OPENROUTER_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: advisor-secrets
+              key: OPENROUTER_API_KEY
+      resources:
+        requests: {memory: "512Mi", cpu: "250m"}
+        limits: {memory: "1Gi", cpu: "500m"}

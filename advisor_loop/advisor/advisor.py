@@ -138,12 +138,26 @@ def _history_hints(history: list[tuple[ConfigVector, Outcome]]) -> str:
         if spill:
             hints.append("Houve spill: aumente memoria por executor ou shuffle_partitions.")
         u = utilization(best_cv, dur, m)
-        if u is not None and u < 0.3:
+        # Utilizacao baixa tem DUAS causas opostas: CPU ociosa por sobra de
+        # paralelismo (query leve -> menos cores) OU espera de I/O de shuffle/
+        # rede (query shuffle-heavy -> MAIS executores = mais leitores/escritores
+        # paralelos). Na fila quente a versao nao-condicionada empurrou q50
+        # (8.8GB shuffle, util 7-19% por I/O) para BAIXO (24c->16c->12c, todos
+        # piores) enquanto o random achou 82s a 92 cores. Condicionar ao shuffle.
+        if u is not None and u < 0.3 and heavy_shuffle:
+            hints.append(
+                f"UTILIZACAO BAIXA ({100 * u:.0f}%) COM SHUFFLE PESADO ({_fmt_bytes(shuffle)}) "
+                f"na melhor config ({best_cv.executor_cores}c x {best_cv.executor_instances}w): "
+                "a query esta limitada por I/O de shuffle/rede, NAO por CPU -- os cores ficam "
+                "esperando dados. Mais executores = mais leitores/escritores paralelos. Teste "
+                "MAIS cores totais (mais executor_instances), sem inflar memoria por executor.")
+        elif u is not None and u < 0.3:
             hints.append(
                 f"UTILIZACAO BAIXA na melhor config ({100 * u:.0f}% dos "
-                f"{best_cv.executor_cores * best_cv.executor_instances} cores totais ocupados): "
-                "a query nao e limitada por CPU -- cortar cores totais nao deve piorar e "
-                "reduz overhead de scheduling/inicializacao. Teste MENOS cores totais.")
+                f"{best_cv.executor_cores * best_cv.executor_instances} cores totais ocupados) "
+                "e shuffle leve: a query nao e limitada por CPU nem por I/O de shuffle -- cortar "
+                "cores totais nao deve piorar e reduz overhead de scheduling/inicializacao. "
+                "Teste MENOS cores totais.")
         elif u is not None and u > 0.7:
             hints.append(
                 f"UTILIZACAO ALTA na melhor config ({100 * u:.0f}%): limitada por CPU -- "

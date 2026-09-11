@@ -17,7 +17,7 @@ spec:
     kubernetes.io/hostname: ids-pb
   containers:
     - name: controller
-      image: ghcr.io/italovinicius18/advisor-controller:sf100-r10
+      image: ghcr.io/italovinicius18/advisor-controller:sf100-r11
       imagePullPolicy: Always
       env:
         - name: CAMPAIGN

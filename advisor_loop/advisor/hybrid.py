@@ -68,8 +68,18 @@ class HybridAdvisor:
         best_cv, best_qr = min(succ, key=lambda t: t[1].duration_ms)
         seen = {cv.config_hash() for cv, _ in history}
         u = utilization(best_cv, best_qr.duration_ms, best_qr.metrics)
-        # util baixa => encolher primeiro; alta ou desconhecida => crescer primeiro
-        dirs = (-1, +1) if (u is not None and u < 0.3) else (+1, -1)
+        m = best_qr.metrics or {}
+        shuffle = max(m.get("shuffle_read_bytes") or 0, m.get("shuffle_write_bytes") or 0)
+        heavy_shuffle = shuffle >= 1 * 1024 ** 3
+        # Direcao inicial no eixo de paralelismo: shuffle pesado => I/O-bound =>
+        # crescer primeiro (util baixa ai e espera de I/O, nao CPU ociosa);
+        # shuffle leve + util baixa => encolher primeiro; senao crescer.
+        if heavy_shuffle:
+            dirs = (+1, -1)
+        elif u is not None and u < 0.3:
+            dirs = (-1, +1)
+        else:
+            dirs = (+1, -1)
         for step in STEPS:
             for axis in AXES:
                 for d in dirs:
@@ -81,6 +91,7 @@ class HybridAdvisor:
                     if cand.config_hash() in seen or not self.guardian.validate(cand)[0]:
                         continue
                     util_s = f", util={100 * u:.0f}%" if u is not None else ""
+                    util_s += ", shuffle-heavy" if heavy_shuffle else ""
                     return Recommendation(
                         config=cand,
                         rationale=(f"hybrid pattern-search: {axis} {cur}->{new} "
