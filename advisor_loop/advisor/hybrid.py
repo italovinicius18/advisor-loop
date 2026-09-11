@@ -17,6 +17,13 @@ retomavel):
     paralelismo vem da UTILIZACAO medida (util<30% => menos primeiro;
     util>70% => mais primeiro) -- o sinal do driver dirige o numerico.
   - sem candidato inedito/viavel => devolve ao LLM.
+  - v3: em query SHUFFLE-HEAVY o primeiro movimento numerico e CONSOLIDACAO
+    (trocar instancias por cores/executor a cores totais ~constantes, escalando
+    a memoria para manter mem/core). Evidencia: dois seeds do random acharam
+    q23/q50 em 3-4 executores x 23c (shuffle fica local); os bracos LLM nunca
+    chegaram la porque o modelo ancora em 4-6c/exec e o eixo de cores era o
+    ultimo explorado. Propostas do LLM que repetem config ja vista caem para o
+    passo numerico (q23 v2 desperdicou uma iteracao repetindo 5c x 20w).
 """
 from __future__ import annotations
 
@@ -39,6 +46,20 @@ def _success(history):
     return out
 
 
+def consolidate(cv: ConfigVector, factor: float) -> ConfigVector:
+    """factor>1: menos instancias, mais cores/exec (cores totais ~iguais);
+    factor<1: o inverso. Memoria por executor escala com cores/exec para manter
+    mem/core. Clampa nas faixas do ConfigVector."""
+    lo_i, hi_i = RANGES["executor_instances"]
+    lo_c, hi_c = RANGES["executor_cores"]
+    lo_m, hi_m = RANGES["executor_memory_gb"]
+    inst = max(lo_i, min(hi_i, int(round(cv.executor_instances / factor))))
+    cores = max(lo_c, min(hi_c, int(round(cv.executor_cores * factor))))
+    mem = max(lo_m, min(hi_m, int(round(cv.executor_memory_gb * cores / cv.executor_cores))))
+    return cv.model_copy(update={"executor_instances": inst, "executor_cores": cores,
+                                 "executor_memory_gb": mem})
+
+
 def _scaled(value: int, axis: str, factor: float) -> int:
     lo, hi = RANGES[axis]
     new = int(round(value * factor))
@@ -58,7 +79,15 @@ class HybridAdvisor:
         succ = _success(history)
         n = len(history)
         if n == 0 or n % self.llm_every == 0 or not succ:
-            return self.llm.advise(ep, context, probe, memories, history=history)
+            rec = self.llm.advise(ep, context, probe, memories, history=history)
+            seen = {cv.config_hash() for cv, _ in history}
+            if rec.config.config_hash() in seen and succ:
+                # o LLM repetiu uma config ja medida: nao gastar a iteracao
+                step = self.numeric_step(history, succ)
+                if step is not None:
+                    step.rationale = "LLM repetiu config ja vista -> " + step.rationale
+                    return step
+            return rec
         step = self.numeric_step(history, succ)
         if step is None:
             return self.llm.advise(ep, context, probe, memories, history=history)
@@ -80,6 +109,29 @@ class HybridAdvisor:
             dirs = (-1, +1)
         else:
             dirs = (+1, -1)
+        def _rec(cand, what):
+            util_s = f", util={100 * u:.0f}%" if u is not None else ""
+            util_s += ", shuffle-heavy" if heavy_shuffle else ""
+            return Recommendation(
+                config=cand,
+                rationale=(f"hybrid pattern-search: {what} em torno da melhor "
+                           f"{best_cv.executor_cores}c x {best_cv.executor_instances}w "
+                           f"x {best_cv.executor_memory_gb}g "
+                           f"({best_qr.duration_ms:g}ms{util_s})"))
+
+        # v3: consolidacao PRIMEIRO em shuffle-heavy (x2, x4, depois x0.5)
+        if heavy_shuffle:
+            for f in (2.0, 4.0, 0.5):
+                cand = consolidate(best_cv, f)
+                if cand.config_hash() in seen or cand.config_hash() == best_cv.config_hash():
+                    continue
+                if not self.guardian.validate(cand)[0]:
+                    continue
+                return _rec(cand, f"consolidacao x{f:g}: {best_cv.executor_cores}c x "
+                                  f"{best_cv.executor_instances}w -> {cand.executor_cores}c x "
+                                  f"{cand.executor_instances}w x {cand.executor_memory_gb}g "
+                                  f"(cores totais {best_cv.executor_cores * best_cv.executor_instances}"
+                                  f"->{cand.executor_cores * cand.executor_instances})")
         for step in STEPS:
             for axis in AXES:
                 for d in dirs:
@@ -90,13 +142,5 @@ class HybridAdvisor:
                     cand = best_cv.model_copy(update={axis: new})
                     if cand.config_hash() in seen or not self.guardian.validate(cand)[0]:
                         continue
-                    util_s = f", util={100 * u:.0f}%" if u is not None else ""
-                    util_s += ", shuffle-heavy" if heavy_shuffle else ""
-                    return Recommendation(
-                        config=cand,
-                        rationale=(f"hybrid pattern-search: {axis} {cur}->{new} "
-                                   f"(passo {step:.0%}) em torno da melhor "
-                                   f"{best_cv.executor_cores}c x {best_cv.executor_instances}w "
-                                   f"x {best_cv.executor_memory_gb}g "
-                                   f"({best_qr.duration_ms:g}ms{util_s})"))
+                    return _rec(cand, f"{axis} {cur}->{new} (passo {step:.0%})")
         return None

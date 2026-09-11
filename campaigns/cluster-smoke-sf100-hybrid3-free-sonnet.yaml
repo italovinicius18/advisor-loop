@@ -1,0 +1,17 @@
+# Hibrido v3 com knobs LIVRES: identico ao hybrid3 exceto que o LLM ancora os 8
+# knobs (a busca numerica so mexe na forma e preserva os extras da ancora).
+# Isola o efeito dos 5 knobs extras (sp~1900 aparece em todos os vencedores do
+# random -- pesa ou e so a forma?).
+name: cluster-smoke-sf100-hybrid3-free-sonnet
+mode: optimize
+backend: spark_k8s
+arm: hybrid
+llm_every: 3
+knobs: free
+level: L0
+provider: anthropic/claude-sonnet-5
+datasets: [sf100]
+queries: [q03, q23, q50]
+tries: 3
+max_iters: 8
+patience: 3

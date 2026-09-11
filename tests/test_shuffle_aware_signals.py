@@ -33,7 +33,10 @@ def test_low_util_with_light_shuffle_still_asks_for_fewer_cores():
     assert "menos cores totais" in h and "shuffle pesado" not in h
 
 
-def test_hybrid_grows_first_when_shuffle_heavy_even_if_util_low():
+def test_hybrid_consolidates_first_when_shuffle_heavy_and_shrinks_when_light():
+    """v3: shuffle pesado => 1o passo numerico e CONSOLIDACAO (menos instancias,
+    mais cores/exec, cores totais ~iguais); shuffle leve + util baixa => encolhe
+    instancias."""
     class LLM:
         def advise(self, *a, **k):
             return Recommendation(rationale="llm", config=ConfigVector(**CFG))
@@ -42,5 +45,7 @@ def test_hybrid_grows_first_when_shuffle_heavy_even_if_util_low():
     light = _hist(40000, int(0.10 * 24 * 40000), 4 * 1024 ** 2)
     r_heavy = hy.advise(None, "c", None, [], history=heavy)
     r_light = hy.advise(None, "c", None, [], history=light)
-    assert r_heavy.config.executor_instances > 6 and "shuffle-heavy" in r_heavy.rationale
-    assert r_light.config.executor_instances < 6
+    assert "consolidacao x2" in r_heavy.rationale and "shuffle-heavy" in r_heavy.rationale
+    assert r_heavy.config.executor_instances < 6 and r_heavy.config.executor_cores > 4
+    assert abs(r_heavy.config.executor_cores * r_heavy.config.executor_instances - 24) <= 2
+    assert r_light.config.executor_instances < 6 and "consolidacao" not in r_light.rationale
