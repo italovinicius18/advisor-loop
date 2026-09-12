@@ -34,6 +34,12 @@ AXES = ("executor_instances", "executor_memory_gb", "executor_cores")
 RANGES = {"executor_instances": (1, 20), "executor_memory_gb": (4, 96),
           "executor_cores": (1, 24)}
 STEPS = (0.5, 0.25, 0.125)
+# Teto da consolidacao: na rodada v3 TODAS as propostas com 96g/executor
+# (24c x 1w x 96g, 24c x 2w x 96g) morreram em driver crash -- 4 iteracoes
+# perdidas em 2 bracos. O Guardian aceita 96g (cap por container), mas na
+# pratica o pod nao roda. Consolidar so ate 64g e >= 2 instancias.
+CONSOLIDATE_MAX_MEM_GB = 64
+CONSOLIDATE_MIN_INSTANCES = 2
 
 
 def _success(history):
@@ -124,6 +130,9 @@ class HybridAdvisor:
             for f in (2.0, 4.0, 0.5):
                 cand = consolidate(best_cv, f)
                 if cand.config_hash() in seen or cand.config_hash() == best_cv.config_hash():
+                    continue
+                if f > 1 and (cand.executor_memory_gb > CONSOLIDATE_MAX_MEM_GB
+                              or cand.executor_instances < CONSOLIDATE_MIN_INSTANCES):
                     continue
                 if not self.guardian.validate(cand)[0]:
                     continue

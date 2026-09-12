@@ -48,6 +48,19 @@ def test_shuffle_heavy_first_numeric_step_is_consolidation():
     assert "consolidacao x4" in r2.rationale and r2.config.executor_cores == 20
 
 
+def test_consolidation_capped_at_64g_and_2_instances():
+    """v3.1: 24c x 1w x 96g e 24c x 2w x 96g crasharam o driver na rodada v3;
+    a consolidacao nao pode propor >64g nem <2 instancias."""
+    hy = HybridAdvisor(LLM(CFG), Guardian(CAPS))
+    big = {**CFG, "executor_cores": 12, "executor_instances": 4, "executor_memory_gb": 48}
+    hist = [_hist(big, 120000, int(0.3 * 48 * 120000), int(10 * GB))]
+    r = hy.advise(None, "c", None, [], history=hist)
+    # x2 daria 24c x 2w x 96g (>64g) -> pulado; x4 daria 1 instancia -> pulado;
+    # x0.5 (6c x 8w x 24g) e o proximo candidato de consolidacao
+    assert "consolidacao x0.5" in r.rationale
+    assert r.config.executor_memory_gb <= 64 and r.config.executor_instances >= 2
+
+
 def test_light_shuffle_does_not_consolidate_first():
     hy = HybridAdvisor(LLM(CFG), Guardian(CAPS))
     hist = [_hist(CFG, 20000, int(0.3 * 80 * 20000), 4 * 1024 ** 2)]
