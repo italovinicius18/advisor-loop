@@ -1,4 +1,4 @@
-# hybrid3: hibrido v3 (consolidacao) -- ver campaigns/cluster-smoke-sf100-hybrid3-sonnet-r2-r2.yaml
+# hybrid3: hibrido v3 (consolidacao) -- ver campaigns/cluster-smoke-sf100-hybrid3-sonnet-r2.yaml
 apiVersion: v1
 kind: Pod
 metadata:
@@ -6,7 +6,7 @@ metadata:
   namespace: italo-unb
   labels:
     app: advisor-controller
-    campaign: cluster-smoke-sf100-hybrid3-sonnet-r2-r2
+    campaign: cluster-smoke-sf100-hybrid3-sonnet-r2
 spec:
   serviceAccountName: ns-admin
   restartPolicy: Never
@@ -20,7 +20,7 @@ spec:
       imagePullPolicy: Always
       env:
         - name: CAMPAIGN
-          value: campaigns/cluster-smoke-sf100-hybrid3-sonnet-r2-r2.yaml
+          value: campaigns/cluster-smoke-sf100-hybrid3-sonnet-r2.yaml
         - name: RESULT_PREFIX
           value: smoke-sf100-hybrid3-sonnet-r2
         - name: OPENROUTER_API_KEY

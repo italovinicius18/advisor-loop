@@ -55,3 +55,7 @@ spark:
   # Pool de egress = nos que puxam a imagem do GHCR e roteiam o MinIO.
   pod_template_file: /opt/advisor/pod-template-egress.yaml
   node_affinity_hostnames: [ids-es, ids-rn, ids-pb, ids-go]   # ids-go = MinIO (colocation)
+  # Teto de wall clock POR SUBMIT (o submitter multiplica por tries+1 com tries em
+  # sessao): 3000s x 4 = 200 min. Necessario para a baseline default (8 cores)
+  # de q23 em sf500 (~25 min/execucao x 4). Em sf100 nunca chega perto.
+  max_wall_clock_s: 3000

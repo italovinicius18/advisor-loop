@@ -1,0 +1,14 @@
+# Hibrido v3.1 (consolidacao, knobs pinados) em sf500. Gerado por scripts/gen_sf_campaigns.py.
+name: sf500-hybrid3
+mode: optimize
+backend: spark_k8s
+arm: hybrid
+llm_every: 3
+knobs: matrix3
+level: L0
+provider: anthropic/claude-sonnet-5
+datasets: [sf500]
+queries: [q03, q23, q50]
+tries: 3
+max_iters: 8
+patience: 3

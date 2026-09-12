@@ -1,0 +1,9 @@
+name: proposal-sf1-loop
+level: L2
+provider: deepseek/deepseek-v4-flash-0731
+backend: proposal
+datasets: [sf1]
+queries: [q03, q07, q19, q42, q52, q55, q63, q98]
+objective: min_time
+tries: 3
+memory: "on"

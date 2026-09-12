@@ -49,7 +49,10 @@ def build_deps(campaign_path: Path, root: Path = Path(".")) -> Deps:
             image=spark_config["image"],
             node_selector=spark_config.get("node_selector"),
             pod_template_file=spark_config.get("pod_template_file"),
-            node_affinity_hostnames=spark_config.get("node_affinity_hostnames")))
+            node_affinity_hostnames=spark_config.get("node_affinity_hostnames"),
+            # teto por submit (x(tries+1) com tries em sessao); SF grandes precisam
+            # de mais que os 1200s default (baseline q23 sf500 c/ 1 executor).
+            max_wall_clock_s=float(spark_config.get("max_wall_clock_s", 1200))))
     elif camp.get("backend") == "proposal":
         backend = ProposalBackend()
     else:
