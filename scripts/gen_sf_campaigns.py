@@ -14,6 +14,15 @@ import duckdb
 QUERIES = ["q03", "q23", "q50"]
 PINNED = dict(driver_memory_gb=8, shuffle_partitions=200, advisory_partition_mb=64,
               aqe_enabled=True, broadcast_threshold_mb=10)
+# SF>=750: a matriz so rodou a grade 'large' (12c x 48g x W2/W4/W6) e SO com o
+# patch v2 (shuffle_partitions=2000 + advisory 64m + driver 16g); o default
+# Spark (8c x 1w x 8g, driver 4g) nao completa. Logo: knobs pinados = os da
+# matriz nesse SF, baseline = a menor celula large (W2), e SEM braco random
+# (configs pequenas sorteadas viram timeouts de 200 min cada).
+PINNED_BIG = dict(driver_memory_gb=16, shuffle_partitions=2000, advisory_partition_mb=64,
+                  aqe_enabled=True, broadcast_threshold_mb=10)
+BASELINE_BIG = dict(executor_cores=12, executor_memory_gb=48, executor_instances=2, **PINNED_BIG)
+BIG_SF = 750
 ROOT = Path(__file__).resolve().parents[1]
 
 POD = """# {title}
@@ -52,9 +61,14 @@ spec:
 """
 
 
+def pinned_for(sf: int) -> dict:
+    return PINNED_BIG if sf >= BIG_SF else PINNED
+
+
 def oracle_cells(matrix: str, sf: int) -> dict[str, dict]:
     con = duckdb.connect()
     out = {}
+    pinned = pinned_for(sf)
     for q in QUERIES:
         row = con.execute(
             """SELECT executor_cores, CAST(executor_memory_gb AS INT), workers, duration_ms
@@ -64,7 +78,7 @@ def oracle_cells(matrix: str, sf: int) -> dict[str, dict]:
             raise SystemExit(f"sem celula success para sf{sf} {q}")
         c, m, w, d = row
         out[q] = dict(executor_cores=int(c), executor_memory_gb=int(m), executor_instances=int(w),
-                      t_star_s=round(d / 1000, 1), **PINNED)
+                      t_star_s=round(d / 1000, 1), **pinned)
     con.close()
     return out
 
@@ -93,8 +107,16 @@ def main():
     queue = []
     for sf in a.sfs:
         ds = f"sf{sf}"
+        big = sf >= BIG_SF
         cells = oracle_cells(a.matrix, sf)
         cfgs = "\n".join(f"  {q}: {yaml_cfg(c)}   # t*={c['t_star_s']}s" for q, c in cells.items())
+        extra = ""
+        if big:
+            pin = ", ".join(f"{k}: {str(v).lower() if isinstance(v, bool) else v}"
+                            for k, v in PINNED_BIG.items())
+            extra = (f"# SF>={BIG_SF}: knobs pinados = os da matriz neste SF (patch v2) e baseline =\n"
+                     f"# menor celula 'large' (12c x 2w x 48g); o default Spark nao roda aqui.\n"
+                     f"pinned: {{{pin}}}\nbaseline_config: {yaml_cfg(BASELINE_BIG)}\n")
         write(ROOT / f"campaigns/{ds}-replay.yaml", f"""# Replay do oraculo em {ds}: celula vencedora da matriz por query, no harness
 # quente (regua t*_harness deste SF). Gerado por scripts/gen_sf_campaigns.py.
 name: {ds}-replay
@@ -108,7 +130,7 @@ queries: [{', '.join(QUERIES)}]
 tries: {a.tries}
 max_iters: 1
 patience: 1
-configs:
+{extra}configs:
 {cfgs}
 """)
         write(ROOT / f"campaigns/{ds}-hybrid3.yaml", f"""# Hibrido v3.1 (consolidacao, knobs pinados) em {ds}. Gerado por scripts/gen_sf_campaigns.py.
@@ -125,8 +147,15 @@ queries: [{', '.join(QUERIES)}]
 tries: {a.tries}
 max_iters: 8
 patience: 3
-""")
-        write(ROOT / f"campaigns/{ds}-random.yaml", f"""# Controle random-8 (schema livre) em {ds}. Gerado por scripts/gen_sf_campaigns.py.
+{extra}""")
+        if big:
+            arms = ("replay", "hybrid3")
+        else:
+            arms = ("replay", "hybrid3", "random")
+        if big:
+            print(f"{ds}: sem braco random (SF>={BIG_SF})")
+        if not big:
+            write(ROOT / f"campaigns/{ds}-random.yaml", f"""# Controle random-8 (schema livre) em {ds}. Gerado por scripts/gen_sf_campaigns.py.
 name: {ds}-random
 mode: optimize
 backend: spark_k8s
@@ -140,7 +169,7 @@ tries: {a.tries}
 max_iters: 8
 patience: 3
 """)
-        for arm in ("replay", "hybrid3", "random"):
+        for arm in arms:
             name = f"{ds}-{arm}"
             write(ROOT / f"kubernetes/campaign-pods/advisor-controller-{name}.yaml",
                   POD.format(title=f"{name} (multi-SF; gerado por scripts/gen_sf_campaigns.py)",

@@ -52,7 +52,8 @@ def _run_median(deps: Deps, ep: Episode, rec: Recommendation, tries: int):
 
 
 def optimize(episode: Episode, deps: Deps, advisor, max_iters: int = 4,
-             patience: int = 2, tries: int = 1) -> dict:
+             patience: int = 2, tries: int = 1,
+             baseline_cfg: ConfigVector | None = None) -> dict:
     """Laço fechado de otimização (spec §2.5): propose -> validate -> execute ->
     distill -> re-propose. Para em patience iterações sem melhora ou em max_iters.
 
@@ -71,13 +72,16 @@ def optimize(episode: Episode, deps: Deps, advisor, max_iters: int = 4,
     # optimize -- poluindo o contraste cientifico L0 (r6) vs L1.
     probe = deps.probe_factory(episode) if episode.level in ("L1", "L2") else None
 
-    # iteracao 0: baseline default (k tries -> mediana), sem entrar no historico
+    # iteracao 0: baseline default (k tries -> mediana), sem entrar no historico.
+    # `baseline_cfg` substitui o default Spark onde ele NAO roda (SF>=750 exige
+    # sp=2000/driver 16g e >= a grade 'large'); fica documentado no opt_result.
+    base_cfg = baseline_cfg or DEFAULT_CFG
     baseline_ms, _bdurs, baseline_metrics, _berr = _run_median(
-        deps, episode, Recommendation(config=DEFAULT_CFG, rationale="baseline"), tries)
+        deps, episode, Recommendation(config=base_cfg, rationale="baseline"), tries)
     # O baseline ja custou k execucoes: aproveita a telemetria dele como PERFIL
     # da query (trabalho de CPU, utilizacao, volume, plano) no contexto de todas
     # as iteracoes -- o peso real da query antes da primeira proposta.
-    profile = (render_profile(DEFAULT_CFG, baseline_ms, baseline_metrics)
+    profile = (render_profile(base_cfg, baseline_ms, baseline_metrics)
                if baseline_ms is not None else "")
 
     for i in range(1, max_iters + 1):
@@ -146,5 +150,6 @@ def optimize(episode: Episode, deps: Deps, advisor, max_iters: int = 4,
             "best_duration_ms": best_dur,
             "baseline_ms": baseline_ms,
             "baseline_metrics": baseline_metrics,
+            "baseline_config": base_cfg.model_dump(),
             "iterations": iterations,
             "history_len": len(history)}

@@ -46,12 +46,10 @@ PINNED_MATRIX = {"driver_memory_gb": 8, "shuffle_partitions": 200,
                  "broadcast_threshold_mb": 10}
 _SUBMIT_MATRIX3 = _submit_tool(SHAPE_KNOBS)
 
-_KNOBS_NOTE = {
-    "matrix3": ("## Knobs ajustaveis NESTA campanha\nSomente executor_cores, "
-                "executor_memory_gb e executor_instances. Os demais estao FIXOS em "
-                + ", ".join(f"{k}={v}" for k, v in PINNED_MATRIX.items())
-                + " (nao os envie)."),
-}
+def _knobs_note(pinned: dict) -> str:
+    return ("## Knobs ajustaveis NESTA campanha\nSomente executor_cores, "
+            "executor_memory_gb e executor_instances. Os demais estao FIXOS em "
+            + ", ".join(f"{k}={v}" for k, v in pinned.items()) + " (nao os envie).")
 
 _PROBE_TOOLS = [
     {"type": "function", "function": {"name": "list_tables",
@@ -310,7 +308,7 @@ class Advisor:
                  max_tokens: int | None = None,
                  tool_choice: str | dict | None = None,
                  reasoning: dict | None = None,
-                 knobs: str = "free"):
+                 knobs: str = "free", pinned: dict | None = None):
         self.client, self.journal, self.max_rounds = client, journal, max_rounds
         self.max_tokens = max_tokens
         # tool_choice/reasoning: passados a cada chat() -> forçam tool call e/ou
@@ -323,15 +321,17 @@ class Advisor:
             raise ValueError(f"knobs desconhecido: {knobs!r} (use 'free' ou 'matrix3')")
         self.knobs = knobs
         self._submit = _SUBMIT_MATRIX3 if knobs == "matrix3" else _SUBMIT
-        self._pinned = PINNED_MATRIX if knobs == "matrix3" else {}
+        # `pinned` sobrescreve os valores fixos (a matriz usou sp=2000/driver 16g
+        # em SF>=750 -- pinar nos defaults de SF<=500 la seria inviavel).
+        self._pinned = (dict(PINNED_MATRIX, **(pinned or {})) if knobs == "matrix3" else {})
 
     def advise(self, ep: Episode, context: str, probe, memories: list[str],
                history: list[tuple[ConfigVector, Outcome]] = []) -> Recommendation:
         tools = [self._submit] + (_PROBE_TOOLS if probe else [])
         mem = "\n".join(f"- {m}" for m in memories) or "(sem memorias)"
         user_content = f"{context}\n\n## Memorias de episodios anteriores\n{mem}"
-        if self.knobs in _KNOBS_NOTE:
-            user_content = f"{user_content}\n\n{_KNOBS_NOTE[self.knobs]}"
+        if self._pinned:
+            user_content = f"{user_content}\n\n{_knobs_note(self._pinned)}"
         if history:
             hints = _history_hints(history)
             user_content = (

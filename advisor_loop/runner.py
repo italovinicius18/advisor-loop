@@ -20,7 +20,8 @@ class Deps:
 def run_campaign(campaign_path: str | Path, deps: Deps) -> dict:
     camp = yaml.safe_load(Path(campaign_path).read_text())
     # knobs: "free" (default, 8 knobs) | "matrix3" (ablacao: so cores/mem/instancias)
-    adv = Advisor(deps.client, deps.journal, knobs=camp.get("knobs", "free"))
+    adv = Advisor(deps.client, deps.journal, knobs=camp.get("knobs", "free"),
+                  pinned=camp.get("pinned"))
     if camp.get("mode") == "optimize":
         return _run_optimize_campaign(camp, deps, adv)
     ran = skipped = 0
@@ -103,6 +104,8 @@ def _run_optimize_campaign(camp: dict, deps: Deps, adv: Advisor) -> dict:
     else:
         raise ValueError(f"arm desconhecido: {arm!r} (use 'llm', 'random', 'hybrid' ou 'fixed')")
     tries = camp.get("tries", 1)
+    from advisor_loop.episode import ConfigVector
+    baseline_cfg = ConfigVector(**camp["baseline_config"]) if camp.get("baseline_config") else None
     ran = skipped = 0
     cost = 0.0
     for dataset in camp["datasets"]:
@@ -115,7 +118,8 @@ def _run_optimize_campaign(camp: dict, deps: Deps, adv: Advisor) -> dict:
                 skipped += 1
                 continue
             result = optimize(ep, deps, advisor, max_iters=camp.get("max_iters", 4),
-                              patience=camp.get("patience", 2), tries=tries)
+                              patience=camp.get("patience", 2), tries=tries,
+                              baseline_cfg=baseline_cfg)
             deps.journal.append({"kind": "opt_result", "task_key": ek, "arm": arm,
                                  "query": query, "dataset": dataset,
                                  "provider": ep.provider, "level": ep.level,
