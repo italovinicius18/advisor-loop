@@ -19,16 +19,39 @@ def _field_schema(name: str, field) -> dict:
             schema["maximum"] = meta.le
     return schema
 
-_SUBMIT = {
-    "type": "function",
-    "function": {
-        "name": "submit_recommendation",
-        "description": "Envia a configuracao final recomendada.",
-        "parameters": {"type": "object", "additionalProperties": False,
-                       "required": [*ConfigVector.model_fields, "rationale"],
-                       "properties": {**{k: _field_schema(k, f)
-                                         for k, f in ConfigVector.model_fields.items()},
-                                      "rationale": {"type": "string"}}}}}
+def _submit_tool(fields: list[str]) -> dict:
+    return {
+        "type": "function",
+        "function": {
+            "name": "submit_recommendation",
+            "description": "Envia a configuracao final recomendada.",
+            "parameters": {"type": "object", "additionalProperties": False,
+                           "required": [*fields, "rationale"],
+                           "properties": {**{k: _field_schema(k, ConfigVector.model_fields[k])
+                                             for k in fields},
+                                          "rationale": {"type": "string"}}}}}
+
+_SUBMIT = _submit_tool(list(ConfigVector.model_fields))
+
+# Ablacao "matrix3": o LLM so move os 3 eixos que a grade offline varreu
+# (cores x memoria x instancias); os outros 5 ficam PINADOS nos valores fixos da
+# matriz (Spark default; AQE on). Motivacao (journals r5/r6): com schema livre o
+# modelo espalha shuffle_partitions em 100..2000 e advisory em 16..128 -- uma
+# config de forma quase igual ao oraculo (12c x 7w x 56g) ficou 2.4x mais lenta
+# com sp=400/adv=128 vs sp=200/adv=64 da grade. Sem pinar, nao da para separar
+# "erro de forma" de "ruido dos knobs extras" no regret.
+SHAPE_KNOBS = ["executor_cores", "executor_memory_gb", "executor_instances"]
+PINNED_MATRIX = {"driver_memory_gb": 8, "shuffle_partitions": 200,
+                 "advisory_partition_mb": 64, "aqe_enabled": True,
+                 "broadcast_threshold_mb": 10}
+_SUBMIT_MATRIX3 = _submit_tool(SHAPE_KNOBS)
+
+_KNOBS_NOTE = {
+    "matrix3": ("## Knobs ajustaveis NESTA campanha\nSomente executor_cores, "
+                "executor_memory_gb e executor_instances. Os demais estao FIXOS em "
+                + ", ".join(f"{k}={v}" for k, v in PINNED_MATRIX.items())
+                + " (nao os envie)."),
+}
 
 _PROBE_TOOLS = [
     {"type": "function", "function": {"name": "list_tables",
@@ -114,6 +137,31 @@ def _history_hints(history: list[tuple[ConfigVector, Outcome]]) -> str:
         spill = (m.get("memory_spill_bytes", 0) or 0) + (m.get("disk_spill_bytes", 0) or 0)
         if spill:
             hints.append("Houve spill: aumente memoria por executor ou shuffle_partitions.")
+        u = utilization(best_cv, dur, m)
+        # Utilizacao baixa tem DUAS causas opostas: CPU ociosa por sobra de
+        # paralelismo (query leve -> menos cores) OU espera de I/O de shuffle/
+        # rede (query shuffle-heavy -> MAIS executores = mais leitores/escritores
+        # paralelos). Na fila quente a versao nao-condicionada empurrou q50
+        # (8.8GB shuffle, util 7-19% por I/O) para BAIXO (24c->16c->12c, todos
+        # piores) enquanto o random achou 82s a 92 cores. Condicionar ao shuffle.
+        if u is not None and u < 0.3 and heavy_shuffle:
+            hints.append(
+                f"UTILIZACAO BAIXA ({100 * u:.0f}%) COM SHUFFLE PESADO ({_fmt_bytes(shuffle)}) "
+                f"na melhor config ({best_cv.executor_cores}c x {best_cv.executor_instances}w): "
+                "a query esta limitada por I/O de shuffle/rede, NAO por CPU -- os cores ficam "
+                "esperando dados. Mais executores = mais leitores/escritores paralelos. Teste "
+                "MAIS cores totais (mais executor_instances), sem inflar memoria por executor.")
+        elif u is not None and u < 0.3:
+            hints.append(
+                f"UTILIZACAO BAIXA na melhor config ({100 * u:.0f}% dos "
+                f"{best_cv.executor_cores * best_cv.executor_instances} cores totais ocupados) "
+                "e shuffle leve: a query nao e limitada por CPU nem por I/O de shuffle -- cortar "
+                "cores totais nao deve piorar e reduz overhead de scheduling/inicializacao. "
+                "Teste MENOS cores totais.")
+        elif u is not None and u > 0.7:
+            hints.append(
+                f"UTILIZACAO ALTA na melhor config ({100 * u:.0f}%): limitada por CPU -- "
+                "mais cores totais devem reduzir o tempo. Teste MAIS cores totais.")
         # Trust-region + bracketing (TuRBO/OPRO): com uma regiao boa ja conhecida,
         # gastar orcamento refinando LOCALMENTE em torno dela bate saltos aleatorios;
         # e o bracketing dos cores totais ataca direto a falha de calibracao de
@@ -158,9 +206,77 @@ def _derived_signals(cv: ConfigVector, qr) -> str:
     gc = m.get("gc_time_ms") or 0
     if gc and qr.duration_ms:
         parts.append(f"gc/wall={100 * gc / qr.duration_ms:.0f}%")
+    u = utilization(cv, qr.duration_ms, m)
+    if u is not None:
+        parts.append(f"util={100 * u:.0f}%")
+    if m.get("num_tasks"):
+        parts.append(f"tasks={_fmt_count(m['num_tasks'])}")
+    if m.get("max_task_ms") and m.get("median_task_ms"):
+        parts.append(f"skew={m['max_task_ms'] / m['median_task_ms']:.1f}x")
     if m.get("records_read"):
         parts.append(f"rec={_fmt_count(m['records_read'])}")
     return ", ".join(parts)
+
+
+def utilization(cv: ConfigVector, duration_ms, m: dict) -> float | None:
+    """Fracao dos cores totais realmente ocupados com CPU durante o wall:
+    executor_cpu_time / (cores_tot x wall). Baixa (<30%) => a query NAO e limitada
+    por CPU (I/O, latencia, overhead de scheduling) e mais cores nao ajudam."""
+    cpu = (m or {}).get("executor_cpu_time_ms") or 0
+    tc = cv.executor_cores * cv.executor_instances
+    if not cpu or not duration_ms or not tc:
+        return None
+    return cpu / (tc * duration_ms)
+
+
+def render_profile(cv: ConfigVector, duration_ms, m: dict) -> str:
+    """Perfil da query medido na ITERACAO 0 (config default): trabalho total em
+    core-segundos, utilizacao, volume de I/O/shuffle e forma do plano fisico.
+    Da ao LLM o PESO real da query antes da primeira proposta -- e o insumo que
+    faltava para calibrar paralelismo ao peso (super-provisionava a leve,
+    sub-provisionava a pesada). Vem da execucao propria, nunca da matriz."""
+    m = m or {}
+    tc = cv.executor_cores * cv.executor_instances
+    lines = [f"## Perfil da query (iteracao 0, config default "
+             f"{cv.executor_cores}c x {cv.executor_instances}w x {cv.executor_memory_gb}g "
+             f"= {tc} cores totais)"]
+    if duration_ms:
+        lines.append(f"- tempo: {duration_ms / 1000:.1f}s")
+    cpu = m.get("executor_cpu_time_ms") or 0
+    if cpu:
+        work = cpu / 1000
+        lines.append(f"- trabalho de CPU total: {work:.0f} core-segundos "
+                     f"(limite inferior ideal com N cores totais = {work:.0f}/N s)")
+        u = utilization(cv, duration_ms, m)
+        if u is not None:
+            lines.append(f"- utilizacao dos cores no baseline: {100 * u:.0f}%")
+    io = []
+    if m.get("input_bytes"):
+        io.append(f"input={_fmt_bytes(m['input_bytes'])}")
+    if m.get("records_read"):
+        io.append(f"registros={_fmt_count(m['records_read'])}")
+    sh = max(m.get("shuffle_read_bytes") or 0, m.get("shuffle_write_bytes") or 0)
+    if sh:
+        io.append(f"shuffle={_fmt_bytes(sh)}")
+    if io:
+        lines.append("- volume: " + ", ".join(io))
+    if m.get("num_tasks"):
+        t = f"- tasks: {_fmt_count(m['num_tasks'])} em {m.get('num_stages', 0)} stages"
+        if m.get("max_task_ms") and m.get("median_task_ms"):
+            t += (f" (task mediana {m['median_task_ms'] / 1000:.1f}s, "
+                  f"max {m['max_task_ms'] / 1000:.1f}s)")
+        lines.append(t)
+    if m.get("plan_lines"):
+        lines.append(f"- plano fisico: {m.get('plan_joins', 0)} joins "
+                     f"({m.get('plan_broadcast_joins', 0)} broadcast, "
+                     f"{m.get('plan_sort_merge_joins', 0)} sort-merge), "
+                     f"{m.get('plan_exchanges', 0)} shuffles (Exchange), "
+                     f"{m.get('plan_aggregates', 0)} agregacoes, "
+                     f"{m.get('plan_sorts', 0)} sorts, {m.get('plan_scans', 0)} scans")
+    lines.append("Dimensione o paralelismo ao PESO acima: se o trabalho de CPU e pequeno "
+                 "e a utilizacao baixa, muitos cores so adicionam overhead; se o trabalho "
+                 "e grande e a utilizacao alta, mais cores totais reduzem o tempo.")
+    return "\n".join(lines)
 
 
 def render_history(history: list[tuple[ConfigVector, Outcome]]) -> str:
@@ -193,19 +309,29 @@ class Advisor:
     def __init__(self, client, journal: Journal, max_rounds: int = 12,
                  max_tokens: int | None = None,
                  tool_choice: str | dict | None = None,
-                 reasoning: dict | None = None):
+                 reasoning: dict | None = None,
+                 knobs: str = "free"):
         self.client, self.journal, self.max_rounds = client, journal, max_rounds
         self.max_tokens = max_tokens
         # tool_choice/reasoning: passados a cada chat() -> forçam tool call e/ou
         # desligam reasoning para manter o modelo rápido e no protocolo.
         self.tool_choice = tool_choice
         self.reasoning = reasoning
+        # knobs: "free" (8 knobs, schema livre) ou "matrix3" (ablacao: so os 3
+        # eixos da grade; os demais pinados em PINNED_MATRIX).
+        if knobs not in ("free", "matrix3"):
+            raise ValueError(f"knobs desconhecido: {knobs!r} (use 'free' ou 'matrix3')")
+        self.knobs = knobs
+        self._submit = _SUBMIT_MATRIX3 if knobs == "matrix3" else _SUBMIT
+        self._pinned = PINNED_MATRIX if knobs == "matrix3" else {}
 
     def advise(self, ep: Episode, context: str, probe, memories: list[str],
                history: list[tuple[ConfigVector, Outcome]] = []) -> Recommendation:
-        tools = [_SUBMIT] + (_PROBE_TOOLS if probe else [])
+        tools = [self._submit] + (_PROBE_TOOLS if probe else [])
         mem = "\n".join(f"- {m}" for m in memories) or "(sem memorias)"
         user_content = f"{context}\n\n## Memorias de episodios anteriores\n{mem}"
+        if self.knobs in _KNOBS_NOTE:
+            user_content = f"{user_content}\n\n{_KNOBS_NOTE[self.knobs]}"
         if history:
             hints = _history_hints(history)
             user_content = (
@@ -260,7 +386,9 @@ class Advisor:
                 if name == "submit_recommendation":
                     rationale = args.pop("rationale", "")
                     try:
-                        config = ConfigVector(**args)
+                        # pinados por ULTIMO: mesmo que o modelo envie um knob
+                        # fixo (o schema o proibe, mas nao confiamos), ele e sobrescrito.
+                        config = ConfigVector(**{**args, **self._pinned})
                     except pydantic.ValidationError as e:
                         self.journal.append({"kind": "probe", "tool": name, "args": args,
                                              "error": str(e)})

@@ -1,0 +1,35 @@
+# Ablacao 3-knobs (k=3, sonnet, driver r9 c/ sinais de utilizacao+plano).
+# Mesmo padrao de kubernetes/advisor-controller-pod.yaml; um arquivo por
+# campanha para a fila sequencial (1 run por vez no cluster -- contaminacao).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: advisor-controller-matrix3
+  namespace: italo-unb
+  labels:
+    app: advisor-controller
+    campaign: cluster-smoke-sf100-matrix3-sonnet
+spec:
+  serviceAccountName: ns-admin
+  restartPolicy: Never
+  imagePullSecrets:
+    - name: ghcr-pull
+  nodeSelector:
+    kubernetes.io/hostname: ids-pb
+  containers:
+    - name: controller
+      image: ghcr.io/italovinicius18/advisor-controller:sf100-r13
+      imagePullPolicy: Always
+      env:
+        - name: CAMPAIGN
+          value: campaigns/cluster-smoke-sf100-matrix3-sonnet.yaml
+        - name: RESULT_PREFIX
+          value: smoke-sf100-matrix3-sonnet
+        - name: OPENROUTER_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: advisor-secrets
+              key: OPENROUTER_API_KEY
+      resources:
+        requests: {memory: "512Mi", cpu: "250m"}
+        limits: {memory: "1Gi", cpu: "500m"}

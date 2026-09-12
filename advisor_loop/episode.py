@@ -35,6 +35,10 @@ class QueryResult(BaseModel):
     duration_ms: float | None = None
     error: str | None = None
     metrics: dict = Field(default_factory=dict)
+    # runs cronometrados NA MESMA SESSAO (driver TRIES>1): duration_ms e a
+    # mediana deles; cold_ms = 1a execucao (warm-up), o custo fixo do harness.
+    durations_ms: list[float] | None = None
+    cold_ms: float | None = None
 
 class Outcome(BaseModel):
     status: Literal["completed", "driver_crash", "aborted_by_supervisor",

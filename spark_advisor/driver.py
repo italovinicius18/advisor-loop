@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import sys
 import time
 
@@ -28,7 +29,12 @@ def build_result(status, duration_ms, metrics, error) -> dict:
 # histórico visto pelo LLM). Puras/testáveis; o listener em si é coberto ao vivo.
 _METRIC_KEYS = ("input_bytes", "output_bytes", "shuffle_read_bytes",
                 "shuffle_write_bytes", "gc_time_ms", "memory_spill_bytes",
-                "disk_spill_bytes", "records_read")
+                "disk_spill_bytes", "records_read",
+                # trabalho real (executor_cpu_time / run_time) + contagem de
+                # stages/tasks: permitem derivar UTILIZACAO = cpu / (cores_tot x
+                # wall), o sinal que calibra paralelismo (query leve com 96 cores
+                # e util ~5% e auto-explicativa). Mesmos campos da matriz offline.
+                "executor_run_time_ms", "executor_cpu_time_ms", "num_tasks", "num_stages")
 
 
 def zero_metrics() -> dict:
@@ -43,9 +49,66 @@ def accumulate(acc: dict, stage: dict) -> dict:
     return acc
 
 
-def _register_metrics_listener(spark, acc):
+def task_stats(durations_ms: list) -> dict:
+    """max/mediana das duracoes de task -> skew (max/mediana alto = straggler;
+    com muitas tasks curtas o overhead de scheduling domina). Puro."""
+    if not durations_ms:
+        return {"max_task_ms": 0, "median_task_ms": 0}
+    s = sorted(int(d or 0) for d in durations_ms)
+    n = len(s)
+    med = s[n // 2] if n % 2 else (s[n // 2 - 1] + s[n // 2]) / 2
+    return {"max_task_ms": int(s[-1]), "median_task_ms": int(med)}
+
+
+# Resumo do plano fisico (mesmas features de plano da matriz offline, onde
+# dominaram o XGBoost): contagem de operadores por NOME exato do operador no
+# inicio da linha (apos os caracteres de arvore `+- :- *(n)`), para nao confundir
+# Sort com SortMergeJoin nem Exchange com BroadcastExchange.
+_PLAN_OP = re.compile(r"^[\s:+\-*()\d]*([A-Za-z]+)")
+_JOINS = {"BroadcastHashJoin", "SortMergeJoin", "ShuffledHashJoin",
+          "BroadcastNestedLoopJoin", "CartesianProduct"}
+_BCAST_JOINS = {"BroadcastHashJoin", "BroadcastNestedLoopJoin"}
+_AGGS = {"HashAggregate", "SortAggregate", "ObjectHashAggregate"}
+_SCANS = {"Scan", "FileScan", "BatchScan"}
+
+
+def pick_median_run(durations_ms: list, metrics_list: list) -> tuple:
+    """(mediana, metricas do run mais proximo da mediana). O driver executa a
+    query `TRIES` vezes NA MESMA SESSAO (protocolo da matriz offline) e reporta
+    a mediana dos runs QUENTES; as metricas representativas sao as do run cuja
+    duracao esta mais perto da mediana. Puro."""
+    if not durations_ms:
+        return None, {}
+    s = sorted(durations_ms)
+    n = len(s)
+    med = s[n // 2] if n % 2 else (s[n // 2 - 1] + s[n // 2]) / 2
+    i = min(range(len(durations_ms)), key=lambda k: abs(durations_ms[k] - med))
+    return med, metrics_list[i]
+
+
+def plan_summary(plan_text: str) -> dict:
+    """Conta operadores do plano fisico (texto de executedPlan). Puro."""
+    ops = []
+    for line in (plan_text or "").splitlines():
+        m = _PLAN_OP.match(line)
+        if m:
+            ops.append(m.group(1))
+    return {
+        "plan_joins": sum(o in _JOINS for o in ops),
+        "plan_broadcast_joins": sum(o in _BCAST_JOINS for o in ops),
+        "plan_sort_merge_joins": sum(o == "SortMergeJoin" for o in ops),
+        "plan_exchanges": sum(o == "Exchange" for o in ops),
+        "plan_aggregates": sum(o in _AGGS for o in ops),
+        "plan_sorts": sum(o == "Sort" for o in ops),
+        "plan_scans": sum(o in _SCANS for o in ops),
+        "plan_lines": len(ops),
+    }
+
+
+def _register_metrics_listener(spark, acc, task_durs=None):
     """Registra um SparkListener via py4j que acumula taskMetrics por stage em
-    `acc`. Degradação graciosa: se o callback server / addSparkListener falhar,
+    `acc` e, se `task_durs` (lista) for dado, a duracao de cada task em ms.
+    Degradação graciosa: se o callback server / addSparkListener falhar,
     o job segue com métricas zeradas (nunca derruba a execução)."""
     try:
         from py4j.java_gateway import CallbackServerParameters
@@ -75,9 +138,21 @@ def _register_metrics_listener(spark, acc):
                         "gc_time_ms": tm.jvmGCTime(),
                         "memory_spill_bytes": tm.memoryBytesSpilled(),
                         "disk_spill_bytes": tm.diskBytesSpilled(),
+                        "executor_run_time_ms": tm.executorRunTime(),
+                        "executor_cpu_time_ms": tm.executorCpuTime() // 1_000_000,  # ns -> ms
+                        "num_tasks": stageCompleted.stageInfo().numTasks(),
+                        "num_stages": 1,
                     })
                 except Exception as ex:
                     print("ADVISOR_LISTENER_STAGE_ERROR " + str(ex)[:200], flush=True)
+
+            def onTaskEnd(self, taskEnd):
+                if task_durs is None:
+                    return
+                try:
+                    task_durs.append(int(taskEnd.taskInfo().duration()))
+                except Exception as ex:
+                    print("ADVISOR_LISTENER_TASK_ERROR " + str(ex)[:200], flush=True)
 
             def __getattr__(self, name):
                 # o SparkListenerInterface tem ~30 métodos onXxx; os que não
@@ -94,6 +169,42 @@ def _register_metrics_listener(spark, acc):
     except Exception as ex:
         print("ADVISOR_LISTENER_INIT_ERROR " + str(ex)[:200], flush=True)
         return False
+
+
+def _wait_for_executors(spark, timeout_s=180):
+    """Espera os executores REGISTRAREM antes de cronometrar. Sem isso o t0 e
+    tomado enquanto pods de executor ainda sobem (JVM/imagem/scheduling) e a
+    query 'paga' esse startup -- ~45s fixos por run que a matriz offline (99
+    queries numa sessao quente) nunca pagou. Degradacao graciosa: segue apos o
+    timeout com o que registrou."""
+    n, expected, t0 = -1, 0, time.time()
+    try:
+        sc = spark.sparkContext
+        expected = int(sc.getConf().get("spark.executor.instances", "0") or 0)
+        while time.time() - t0 < timeout_s:
+            n = sc._jsc.sc().getExecutorMemoryStatus().size() - 1   # -1 = driver
+            if expected and n >= expected:
+                break
+            time.sleep(2)
+    except Exception as ex:
+        print("ADVISOR_EXECUTORS_ERROR " + str(ex)[:200], flush=True)
+    print(f"ADVISOR_EXECUTORS {n}/{expected} registrados apos {time.time() - t0:.0f}s",
+          flush=True)
+
+
+def _run_once(spark, df, metrics, task_durs) -> tuple:
+    """Uma execucao cronometrada: zera acumuladores, executa, drena o listener
+    bus e devolve (duration_ms, metricas desta execucao)."""
+    for k in list(metrics):
+        metrics[k] = 0
+    del task_durs[:]
+    t0 = time.time()
+    df.write.format("noop").mode("overwrite").save()
+    dur = (time.time() - t0) * 1000
+    _flush_listener_bus(spark)
+    m = dict(metrics)
+    m.update(task_stats(task_durs))
+    return dur, m
 
 
 def _flush_listener_bus(spark, timeout_ms=10000):
@@ -130,7 +241,8 @@ def main():   # coberto pela validação ao vivo, não por unit test
     spark = SparkSession.builder.appName(f"advisor-{query}-{sf}").getOrCreate()
     # métricas reais coletadas por um SparkListener (acumulador mutado nos callbacks)
     metrics = zero_metrics()
-    _register_metrics_listener(spark, metrics)
+    task_durs: list = []
+    _register_metrics_listener(spark, metrics, task_durs)
     # todas as tabelas TPC-DS (registrar as que existirem na Silver evita
     # a fragilidade de extrair nomes do SQL — joins por virgula/alias)
     TPCDS_TABLES = [
@@ -154,16 +266,39 @@ def main():   # coberto pela validação ao vivo, não por unit test
                 print(f"ADVISOR_LOAD_ERROR {name}: {str(le)[:300]}", flush=True)
         print(f"ADVISOR_LOADED {len(loaded)}/{len(TPCDS_TABLES)}: {loaded}", flush=True)
         sql = open(f"/opt/advisor/queries/{query}.sql").read().strip().rstrip(";").strip()
-        # zera o acumulador logo antes do query para isolar as métricas dele dos
-        # reads de metadata do Delta feitos no registro das views acima.
-        for k in list(metrics):
-            metrics[k] = 0
-        t0 = time.time()
-        spark.sql(sql).write.format("noop").mode("overwrite").save()
-        dur = (time.time() - t0) * 1000
-        _flush_listener_bus(spark)   # garante que os stages do query já contaram
-        print(f"ADVISOR_METRICS {json.dumps(metrics)}", flush=True)
-        _write_result(build_result("success", round(dur, 1), dict(metrics), None))
+        df = spark.sql(sql)
+        # Protocolo QUENTE (igual ao da matriz offline): espera os executores
+        # registrarem, roda WARMUP execucoes nao cronometradas (a 1a e reportada
+        # como cold_ms = custo fixo do harness) e depois TRIES execucoes
+        # cronometradas na MESMA sessao; duration_ms = mediana dos runs quentes.
+        tries = max(1, int(os.environ.get("TRIES", "1")))
+        warmup = max(0, int(os.environ.get("WARMUP", "1")))
+        _wait_for_executors(spark)
+        cold_ms = None
+        for w in range(warmup):
+            d, _ = _run_once(spark, df, metrics, task_durs)
+            cold_ms = d if cold_ms is None else cold_ms
+            print(f"ADVISOR_WARMUP {w + 1}/{warmup} {d:.0f}ms", flush=True)
+        durs, mets = [], []
+        for t in range(tries):
+            d, m = _run_once(spark, df, metrics, task_durs)
+            durs.append(round(d, 1))
+            mets.append(m)
+            print(f"ADVISOR_TRY {t + 1}/{tries} {d:.0f}ms", flush=True)
+        dur, rep = pick_median_run(durs, mets)
+        # plano fisico FINAL (com AQE, executedPlan apos a execucao e o plano
+        # adaptado): resumo em contagens no metrics; texto bruto so no stdout.
+        try:
+            plan_txt = df._jdf.queryExecution().executedPlan().toString()
+            rep.update(plan_summary(plan_txt))
+            print("ADVISOR_PLAN " + plan_txt[:4000].replace("\n", "\\n"), flush=True)
+        except Exception as pe:
+            print("ADVISOR_PLAN_ERROR " + str(pe)[:200], flush=True)
+        print(f"ADVISOR_METRICS {json.dumps(rep)}", flush=True)
+        result = build_result("success", round(dur, 1), rep, None)
+        result["durations_ms"] = durs
+        result["cold_ms"] = round(cold_ms, 1) if cold_ms is not None else None
+        _write_result(result)
     except Exception as e:
         _write_result(build_result(classify_error(e), None, metrics, str(e)[:500]))
         spark.stop()

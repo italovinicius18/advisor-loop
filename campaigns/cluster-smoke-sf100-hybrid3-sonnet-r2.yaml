@@ -1,0 +1,17 @@
+# Hibrido v3 (knobs pinados), SEGUNDA execucao independente (r2): mesma
+# campanha do hybrid3, nome distinto (chave de episodio) -> a variacao vem do
+# proprio LLM (temperatura) + ruido do cluster. Da a barra de erro do braco.
+# v3.1: consolidacao capada em <=64g e >=2 instancias (96g crashava o driver).
+name: cluster-smoke-sf100-hybrid3-sonnet-r2
+mode: optimize
+backend: spark_k8s
+arm: hybrid
+llm_every: 3
+knobs: matrix3
+level: L0
+provider: anthropic/claude-sonnet-5
+datasets: [sf100]
+queries: [q03, q23, q50]
+tries: 3
+max_iters: 8
+patience: 3

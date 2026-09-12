@@ -1,0 +1,16 @@
+# Controle random-8 (k=3): FreeRandomAdvisor no MESMO schema livre e MESMO
+# orcamento (8 iteracoes x 3 tries) do braco LLM, com rejection sampling contra
+# o Guardian. E o piso: se o LLM nao bate o random com o mesmo orcamento, nenhum
+# incremento de contexto/modelo importa. Deterministico por seed.
+name: cluster-smoke-sf100-random-k3
+mode: optimize
+backend: spark_k8s
+arm: random
+seed: 0
+level: L0
+provider: random-free-8
+datasets: [sf100]
+queries: [q03, q23, q50]
+tries: 3
+max_iters: 8
+patience: 3

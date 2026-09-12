@@ -1,4 +1,5 @@
 import statistics
+from advisor_loop.advisor.advisor import render_profile
 from advisor_loop.episode import ConfigVector, Episode, Outcome, Recommendation
 from advisor_loop.runner import Deps
 
@@ -19,6 +20,19 @@ def _run_median(deps: Deps, ep: Episode, rec: Recommendation, tries: int):
     {"query_status", "error"} da ultima execucao sem sucesso, para o journal
     registrar POR QUE a proposta falhou (timeout/oom/erro de query) em vez de um
     "error" mudo -- sem isso, q23/q50 no smoke gravaram error sem diagnostico."""
+    if getattr(deps.backend, "in_session_tries", False):
+        # Backend que roda os k tries NA MESMA SESSAO (SparkK8sBackend): uma
+        # unica submissao; o driver ja devolve a mediana dos runs quentes e a
+        # lista de duracoes. cold_ms (1a execucao fria) vai no metrics para o
+        # journal registrar o custo fixo do harness.
+        out = deps.backend.execute(ep, rec, tries=tries)
+        qr = next(iter(out.per_query.values()))
+        if qr.status == "success" and qr.duration_ms is not None:
+            m = dict(qr.metrics or {})
+            if qr.cold_ms is not None:
+                m["cold_ms"] = qr.cold_ms
+            return qr.duration_ms, list(qr.durations_ms or [qr.duration_ms]), m, None
+        return None, [], {}, {"query_status": qr.status, "error": qr.error}
     durs: list[float] = []
     metrics_by: dict[float, dict] = {}
     err: dict | None = None
@@ -50,14 +64,26 @@ def optimize(episode: Episode, deps: Deps, advisor, max_iters: int = 4,
     best_dur = None
     no_improve = 0
     iterations: list[dict] = []
-    probe = deps.probe_factory(episode)
+    # O nivel da campanha e autoritativo sobre a sondagem (igual ao caminho
+    # single-shot em runner.py): so L1/L2 recebem probe. Sem este gate, o
+    # probe_factory seria chamado incondicionalmente e bastaria o bloco
+    # probe_service no datasets.yaml para LIGAR a sondagem em qualquer campanha
+    # optimize -- poluindo o contraste cientifico L0 (r6) vs L1.
+    probe = deps.probe_factory(episode) if episode.level in ("L1", "L2") else None
 
     # iteracao 0: baseline default (k tries -> mediana), sem entrar no historico
-    baseline_ms, _bdurs, _bm, _berr = _run_median(
+    baseline_ms, _bdurs, baseline_metrics, _berr = _run_median(
         deps, episode, Recommendation(config=DEFAULT_CFG, rationale="baseline"), tries)
+    # O baseline ja custou k execucoes: aproveita a telemetria dele como PERFIL
+    # da query (trabalho de CPU, utilizacao, volume, plano) no contexto de todas
+    # as iteracoes -- o peso real da query antes da primeira proposta.
+    profile = (render_profile(DEFAULT_CFG, baseline_ms, baseline_metrics)
+               if baseline_ms is not None else "")
 
     for i in range(1, max_iters + 1):
         context = deps.pack.render(episode)
+        if profile:
+            context = f"{context}\n\n{profile}"
         mems = deps.memory.retrieve(episode) if hasattr(deps.memory, "retrieve") else []
         rec = advisor.advise(episode, context, probe, mems, history=history)
 
@@ -119,5 +145,6 @@ def optimize(episode: Episode, deps: Deps, advisor, max_iters: int = 4,
     return {"best_config": best_config.model_dump() if best_config else None,
             "best_duration_ms": best_dur,
             "baseline_ms": baseline_ms,
+            "baseline_metrics": baseline_metrics,
             "iterations": iterations,
             "history_len": len(history)}

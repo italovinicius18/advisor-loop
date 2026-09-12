@@ -1,0 +1,18 @@
+# Hibrido v3 (k=3, sonnet, knobs=matrix3): eixo de CONSOLIDACAO primeiro em
+# shuffle-heavy (instancias <-> cores/exec a cores totais fixos) + fallthrough
+# numerico quando o LLM repete config. Pool v2 (ids-go). Pergunta: a forma
+# "poucos executores gordos" que o random achou (3-4 x 23c) e alcancavel por
+# busca numerica com os 5 knobs extras PINADOS? Par exato: hybrid3-free.
+name: cluster-smoke-sf100-hybrid3-sonnet
+mode: optimize
+backend: spark_k8s
+arm: hybrid
+llm_every: 3
+knobs: matrix3
+level: L0
+provider: anthropic/claude-sonnet-5
+datasets: [sf100]
+queries: [q03, q23, q50]
+tries: 3
+max_iters: 8
+patience: 3

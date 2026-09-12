@@ -7,7 +7,7 @@ class FakeSubmitter:
         self.result = result
         self.seen = []
 
-    def submit(self, config, sf, query, run_id):
+    def submit(self, config, sf, query, run_id, tries=1):
         self.seen.append((sf, query, run_id))
         return self.result
 

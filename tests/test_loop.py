@@ -100,6 +100,83 @@ def test_invalid_recommendation_does_not_crash_and_continues(tmp_path):
     assert r["best_duration_ms"] == 3000
 
 
+class CtxCapturingAdvisor:
+    def __init__(self):
+        self.ctx = []
+    def advise(self, ep, ctx, probe, mems, history=None):
+        self.ctx.append(ctx)
+        return Recommendation(rationale="", config=ConfigVector(**CFG))
+
+
+class CpuMetricsBackend:
+    """Baseline e propostas devolvem cpu_time -> o laco monta o perfil."""
+    def execute(self, ep, rec):
+        return Outcome(status="completed", wall_clock_s=90, per_query={
+            ep.queries[0]: QueryResult(status="success", duration_ms=90000.0,
+                                       metrics={"executor_cpu_time_ms": 45000,
+                                                "num_tasks": 400, "num_stages": 5,
+                                                "plan_lines": 12, "plan_joins": 2})})
+
+
+def test_baseline_profile_injected_into_context_and_result(tmp_path):
+    """A telemetria da iteracao 0 vira o bloco 'Perfil da query' em TODAS as
+    iteracoes e sai no opt_result (baseline_metrics)."""
+    ep = Episode(workload="w", dataset="sf1", queries=["q03"], provider="m")
+    adv = CtxCapturingAdvisor()
+    r = optimize(ep, _deps(tmp_path, CpuMetricsBackend()), adv, max_iters=2, patience=3)
+    assert len(adv.ctx) == 2
+    for c in adv.ctx:
+        assert "Perfil da query (iteracao 0" in c and "45 core-segundos" in c
+        assert "2 joins" in c
+    assert r["baseline_metrics"]["executor_cpu_time_ms"] == 45000
+
+
+def test_no_profile_when_baseline_failed(tmp_path):
+    ep = Episode(workload="w", dataset="sf1", queries=["q03"], provider="m")
+    adv = CtxCapturingAdvisor()
+    optimize(ep, _deps(tmp_path, ScriptBackend([None, 4000])), adv, max_iters=1, patience=2)
+    assert "Perfil da query" not in adv.ctx[0]
+
+
+class ProbeCapturingAdvisor:
+    """Registra o probe recebido em cada advise -> checa o gate de nivel."""
+    def __init__(self):
+        self.probes = []
+    def advise(self, ep, ctx, probe, mems, history=None):
+        self.probes.append(probe)
+        return Recommendation(rationale="", config=ConfigVector(**CFG))
+
+
+def _deps_probe(tmp_path, backend, sentinel):
+    from advisor_loop.runner import Deps
+    return Deps(client=None, journal=Journal(tmp_path / "j.jsonl"), pack=Pack(),
+                guardian=Guardian(CLUSTER), backend=backend,
+                memory=MemoryStore(tmp_path / "m.jsonl"),
+                probe_factory=lambda ep: sentinel)
+
+
+def test_probe_gated_off_at_L0(tmp_path):
+    """Em L0 o laco passa probe=None ao advisor MESMO que o probe_factory
+    devolva um probe (o datasets.yaml pode carregar probe_service): o nivel e
+    autoritativo sobre a sondagem."""
+    sentinel = object()
+    ep = Episode(workload="w", dataset="sf1", queries=["q03"], provider="m", level="L0")
+    adv = ProbeCapturingAdvisor()
+    optimize(ep, _deps_probe(tmp_path, ScriptBackend([9000, 4000]), sentinel),
+             adv, max_iters=1, patience=2)
+    assert adv.probes == [None]
+
+
+def test_probe_passed_at_L1(tmp_path):
+    """Em L1 o laco constroi o probe via probe_factory e o passa ao advisor."""
+    sentinel = object()
+    ep = Episode(workload="w", dataset="sf1", queries=["q03"], provider="m", level="L1")
+    adv = ProbeCapturingAdvisor()
+    optimize(ep, _deps_probe(tmp_path, ScriptBackend([9000, 4000]), sentinel),
+             adv, max_iters=1, patience=2)
+    assert adv.probes == [sentinel]
+
+
 class NBadThenGoodAdvisor:
     """As primeiras `bad` iteracoes propoem config inviavel; depois, validas."""
     def __init__(self, bad):

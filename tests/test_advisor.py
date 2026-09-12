@@ -283,6 +283,52 @@ def test_derived_signals_gc_fraction_and_records():
     assert "gc/wall=25%" in d and "rec=288M" in d
 
 
+def test_derived_signals_utilization_tasks_and_skew():
+    from advisor_loop.advisor.advisor import _derived_signals, utilization
+    cv = ConfigVector(**{**CFG, "executor_cores": 8, "executor_instances": 12})   # 96 cores
+    # 96 cores x 60s wall = 5760 core-s disponiveis; cpu 288 core-s => util 5%
+    qr = QueryResult(status="success", duration_ms=60000,
+                     metrics={"executor_cpu_time_ms": 288000, "num_tasks": 2400,
+                              "max_task_ms": 4000, "median_task_ms": 500})
+    assert abs(utilization(cv, 60000, qr.metrics) - 0.05) < 1e-9
+    s = _derived_signals(cv, qr)
+    assert "util=5%" in s and "tasks=2K" in s and "skew=8.0x" in s
+    # sem cpu_time (driver antigo) -> sem util, sem quebrar
+    assert utilization(cv, 60000, {}) is None
+    assert "util=" not in _derived_signals(cv, QueryResult(status="success", duration_ms=1))
+
+
+def test_render_profile_reports_work_utilization_and_plan():
+    from advisor_loop.advisor.advisor import render_profile
+    cv = ConfigVector(**{**CFG, "executor_cores": 8, "executor_instances": 1})
+    m = {"executor_cpu_time_ms": 45000, "input_bytes": 5 * 1024 ** 2,
+         "records_read": 288_000_000, "shuffle_write_bytes": 2 * 1024 ** 3,
+         "num_tasks": 400, "num_stages": 5, "max_task_ms": 9000, "median_task_ms": 800,
+         "plan_lines": 30, "plan_joins": 3, "plan_broadcast_joins": 2,
+         "plan_sort_merge_joins": 1, "plan_exchanges": 4, "plan_aggregates": 2,
+         "plan_sorts": 1, "plan_scans": 4}
+    p = render_profile(cv, 90000, m)
+    assert "iteracao 0" in p and "8c x 1w" in p and "8 cores totais" in p
+    assert "45 core-segundos" in p and "45/N" in p
+    assert "utilizacao dos cores no baseline: 6%" in p      # 45 / (8 x 90)
+    assert "shuffle=2.0GB" in p and "registros=288M" in p
+    assert "400 em 5 stages" in p and "3 joins (2 broadcast, 1 sort-merge)" in p
+    assert "4 shuffles" in p
+
+
+def test_history_hints_low_utilization_says_fewer_cores():
+    from advisor_loop.advisor.advisor import _history_hints
+    cv = ConfigVector(**{**CFG, "executor_cores": 8, "executor_instances": 12})
+    out = Outcome(status="completed", per_query={"q03": QueryResult(
+        status="success", duration_ms=60000, metrics={"executor_cpu_time_ms": 288000})})
+    h = _history_hints([(cv, out)]).lower()
+    assert "utilizacao baixa" in h and "menos cores totais" in h
+    hi = Outcome(status="completed", per_query={"q23": QueryResult(
+        status="success", duration_ms=60000, metrics={"executor_cpu_time_ms": 5000000})})
+    h2 = _history_hints([(cv, hi)]).lower()
+    assert "utilizacao alta" in h2 and "mais cores totais" in h2
+
+
 def test_history_injected_into_context(tmp_path):
     j = Journal(tmp_path / "j.jsonl")
     client = FakeClient([_submit_call()])

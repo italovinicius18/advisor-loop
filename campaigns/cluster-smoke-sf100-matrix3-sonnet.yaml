@@ -1,0 +1,21 @@
+# Ablacao 3-knobs (k=3, claude-sonnet-5, L0). O LLM so move cores x memoria x
+# instancias -- os MESMOS 3 eixos da grade offline; shuffle_partitions/advisory/
+# broadcast/driver/AQE ficam pinados nos valores fixos da matriz.
+# Pergunta: quanto do regret vem da FORMA dos executores e quanto vem do ruido
+# dos 5 knobs extras (r6 mostrou 12c x 7w x 56g com sp=400/adv=128 a 2.4x do
+# oraculo de forma igual com sp=200/adv=64)? Se o regret cair muito aqui, a
+# liberdade extra e o problema e o harness precisa de busca em estagios.
+# Controle pareado: cluster-smoke-sf100-random-k3.yaml (random livre) e, se
+# quiser o par exato, o mesmo yaml com knobs: matrix3.
+name: cluster-smoke-sf100-matrix3-sonnet
+mode: optimize
+backend: spark_k8s
+arm: llm
+knobs: matrix3
+level: L0
+provider: anthropic/claude-sonnet-5
+datasets: [sf100]
+queries: [q03, q23, q50]
+tries: 3
+max_iters: 8
+patience: 3

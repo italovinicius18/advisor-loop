@@ -5,10 +5,13 @@
 # valida sob esse RBAC e nodeAffinity com matchExpressions In [...], que o Spark
 # so aceita via podTemplateFile (nao ha --conf equivalente).
 #
-# Restringe o schedule ao POOL de egress {ids-es, ids-rn, ids-pb}: sao os nos
+# Restringe o schedule ao POOL {ids-es, ids-rn, ids-pb, ids-go}: sao os nos
 # que (a) tem egress -> puxam a imagem spark-advisor do GHCR (pullPolicy
-# IfNotPresent falha nos sem egress e sem cache), (b) roteiam o MinIO por
-# ClusterIP (kube-proxy, cluster-wide). Fixar num no so starvava os executores
+# IfNotPresent falha nos sem egress e sem cache; ids-go validado ao vivo em
+# 2026-09-11), (b) roteiam o MinIO por ClusterIP (kube-proxy, cluster-wide).
+# ids-go entrou porque HOSPEDA o MinIO: o replay do oraculo mostrou o harness
+# 2-3x mais lento que a matriz com 7-12% de CPU (I/O-bound); a matriz tinha
+# executores colocados com o MinIO (feature minio_colocation) e o pool antigo nao. Fixar num no so starvava os executores
 # (24c em ids-pb) e, pior, tornava impossivel o otimo do grid de q23/q50
 # (12c x 6w = 72c/288Gi -> exige >= 2 nos) -> regret confundido com o cap do no.
 # Esta lista e propriedade FIXA do cluster; espelhada em datasets.cluster.yaml
@@ -27,3 +30,4 @@ spec:
                   - ids-es
                   - ids-rn
                   - ids-pb
+                  - ids-go

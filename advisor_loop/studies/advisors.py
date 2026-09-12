@@ -84,6 +84,23 @@ class FixedAdvisor:
         return Recommendation(config=self.config, rationale="A0 fixed best-on-average")
 
 
+class PerQueryFixedAdvisor:
+    """Replay de configs FIXAS por query (ex.: a celula vencedora da matriz),
+    para medir o proprio harness contra o oraculo: se a config do oraculo
+    reproduz t* aqui, o regret e real; se nao, e overhead do harness."""
+
+    def __init__(self, configs: dict[str, dict], default: dict | None = None):
+        self.configs, self.default = configs, default
+
+    def advise(self, ep: Episode, context: str, probe, memories: list[str],
+               history: list = []) -> Recommendation:
+        raw = self.configs.get(ep.queries[0], self.default)
+        if raw is None:
+            raise ValueError(f"sem config fixa para {ep.queries[0]}")
+        return Recommendation(config=ConfigVector(**raw),
+                              rationale=f"fixed replay {ep.queries[0]}")
+
+
 class RandomAdvisor:
     """A1 — busca aleatória sobre a grade. Embaralhamento determinístico por
     episódio (seed + dataset + query); o índice vem de len(history), então não
@@ -115,11 +132,20 @@ class FreeRandomAdvisor:
             "shuffle_partitions": (100, 4000), "advisory_partition_mb": (16, 256),
             "broadcast_threshold_mb": (-1, 512)}
 
-    def __init__(self, guardian, seed: int = 0):
+    def __init__(self, guardian, seed: int = 0, knobs: str = "free"):
         self.guardian = guardian
         self.seed = seed
+        # knobs="matrix3": amostra so os 3 eixos da grade e pina os demais
+        # (mesma ablacao do braco LLM -> controle random pareado).
+        if knobs not in ("free", "matrix3"):
+            raise ValueError(f"knobs desconhecido: {knobs!r} (use 'free' ou 'matrix3')")
+        self.knobs = knobs
 
     def _sample(self, rng) -> ConfigVector:
+        if self.knobs == "matrix3":
+            from advisor_loop.advisor.advisor import PINNED_MATRIX, SHAPE_KNOBS
+            f = {k: rng.randint(*self._INT[k]) for k in SHAPE_KNOBS}
+            return ConfigVector(**f, **PINNED_MATRIX)
         f = {k: rng.randint(lo, hi) for k, (lo, hi) in self._INT.items()}
         f["aqe_enabled"] = rng.random() < 0.5
         return ConfigVector(**f)

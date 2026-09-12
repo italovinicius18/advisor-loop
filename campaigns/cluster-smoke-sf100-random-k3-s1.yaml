@@ -1,0 +1,14 @@
+# Controle random-8 (k=3), SEGUNDA seed: dimensiona a variancia do controle
+# (a seed 0 achou q50 em 82.7s por sorte no 3o sorteio). Mesmo orcamento do LLM.
+name: cluster-smoke-sf100-random-k3-s1
+mode: optimize
+backend: spark_k8s
+arm: random
+seed: 1
+level: L0
+provider: random-free-8-s1
+datasets: [sf100]
+queries: [q03, q23, q50]
+tries: 3
+max_iters: 8
+patience: 3
