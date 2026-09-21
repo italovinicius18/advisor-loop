@@ -16,6 +16,6 @@ patience: 1
 pinned: {driver_memory_gb: 16, shuffle_partitions: 2000, advisory_partition_mb: 64, aqe_enabled: true, broadcast_threshold_mb: 10}
 baseline_config: {executor_cores: 12, executor_memory_gb: 48, executor_instances: 2, driver_memory_gb: 16, shuffle_partitions: 2000, advisory_partition_mb: 64, aqe_enabled: true, broadcast_threshold_mb: 10}
 configs:
-  q03: {executor_cores: 12, executor_memory_gb: 48, executor_instances: 4, driver_memory_gb: 16, shuffle_partitions: 2000, advisory_partition_mb: 64, aqe_enabled: true, broadcast_threshold_mb: 10}   # t*=120.1s
+  q03: {executor_cores: 24, executor_memory_gb: 96, executor_instances: 4, driver_memory_gb: 16, shuffle_partitions: 2000, advisory_partition_mb: 64, aqe_enabled: true, broadcast_threshold_mb: 10}   # t*=111.6s
   q23: {executor_cores: 12, executor_memory_gb: 48, executor_instances: 6, driver_memory_gb: 16, shuffle_partitions: 2000, advisory_partition_mb: 64, aqe_enabled: true, broadcast_threshold_mb: 10}   # t*=836.9s
   q50: {executor_cores: 12, executor_memory_gb: 48, executor_instances: 6, driver_memory_gb: 16, shuffle_partitions: 2000, advisory_partition_mb: 64, aqe_enabled: true, broadcast_threshold_mb: 10}   # t*=303.6s
