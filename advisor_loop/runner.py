@@ -98,9 +98,27 @@ def _run_optimize_campaign(camp: dict, deps: Deps, adv: Advisor) -> dict:
     elif arm == "fixed":                            # replay de configs fixas (oraculo no harness)
         from advisor_loop.studies.advisors import PerQueryFixedAdvisor
         advisor = PerQueryFixedAdvisor(camp.get("configs") or {}, camp.get("config"))
-    elif arm == "hybrid":                           # LLM ancora + pattern search numerico
+    elif arm == "hybrid":                           # anchor + pattern search numerico
         from advisor_loop.advisor.hybrid import HybridAdvisor
-        advisor = HybridAdvisor(adv, deps.guardian, llm_every=camp.get("llm_every", 3))
+        # anchor: "llm" (default, Advisor/LLM) | "heuristic" (A0, sem modelo) |
+        # "jev" (A1, modelo de decisao tipada TypeSafe Jev via OpenRouter).
+        anchor_kind = camp.get("anchor", "llm")
+        if anchor_kind == "heuristic":
+            from advisor_loop.advisor.advisor import PINNED_MATRIX
+            from advisor_loop.advisor.heuristic import HeuristicAnchorAdvisor
+            anchor = HeuristicAnchorAdvisor(deps.guardian,
+                                            dict(PINNED_MATRIX, **(camp.get("pinned") or {})))
+        elif anchor_kind == "jev":
+            from advisor_loop.advisor.advisor import PINNED_MATRIX
+            from advisor_loop.advisor.jev import JevAnchorAdvisor, JevClient
+            anchor = JevAnchorAdvisor(JevClient(), deps.journal, deps.guardian,
+                                      dict(PINNED_MATRIX, **(camp.get("pinned") or {})),
+                                      model=camp.get("jev_model", "typesafe/jev-1.13"))
+        elif anchor_kind == "llm":
+            anchor = adv
+        else:
+            raise ValueError(f"anchor desconhecido: {anchor_kind!r} (use 'llm', 'heuristic' ou 'jev')")
+        advisor = HybridAdvisor(anchor, deps.guardian, llm_every=camp.get("llm_every", 3))
     else:
         raise ValueError(f"arm desconhecido: {arm!r} (use 'llm', 'random', 'hybrid' ou 'fixed')")
     tries = camp.get("tries", 1)

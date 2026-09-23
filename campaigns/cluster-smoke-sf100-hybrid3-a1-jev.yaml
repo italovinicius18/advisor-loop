@@ -1,0 +1,18 @@
+# A1: TypeSafe Jev (Decisions API) responde 2 noul de diagnostico e ESCOLHE entre candidatos numericos; nao gera configs.
+# Escada de ablacao do anchor (tudo o mais igual ao cluster-smoke-sf100-hybrid3-sonnet):
+# se A0/A1 empatarem com A3, o harness e a contribuicao e o modelo e um knob de custo.
+name: cluster-smoke-sf100-hybrid3-a1-jev
+mode: optimize
+backend: spark_k8s
+arm: hybrid
+llm_every: 3
+knobs: matrix3
+level: L0
+anchor: jev
+jev_model: typesafe/jev-1.13
+provider: typesafe/jev-1.13
+datasets: [sf100]
+queries: [q03, q23, q50]
+tries: 3
+max_iters: 8
+patience: 3
