@@ -40,7 +40,7 @@ class _Sub:
     def __init__(self, result):
         self.result, self.seen = result, []
 
-    def submit(self, config, sf, query, run_id, tries=1):
+    def submit(self, config, sf, query, run_id, tries=1, wall_clock_s=None):
         self.seen.append(tries)
         return self.result
 
@@ -64,7 +64,7 @@ class _InSessionBackend:
     def __init__(self):
         self.calls = []
 
-    def execute(self, ep, rec, tries=1):
+    def execute(self, ep, rec, tries=1, **kw):
         self.calls.append(tries)
         return Outcome(status="completed", per_query={ep.queries[0]: QueryResult(
             status="success", duration_ms=25000.0, durations_ms=[26000.0, 25000.0, 24000.0],
@@ -86,7 +86,7 @@ def test_loop_submits_once_per_config_when_backend_runs_tries_in_session():
 
 def test_in_session_failure_reports_error():
     class _Bad(_InSessionBackend):
-        def execute(self, ep, rec, tries=1):
+        def execute(self, ep, rec, tries=1, **kw):
             return Outcome(status="oom", per_query={ep.queries[0]: QueryResult(
                 status="oom", error="heap")})
     ep = Episode(workload="w", dataset="sf100", queries=["q03"], provider="m")

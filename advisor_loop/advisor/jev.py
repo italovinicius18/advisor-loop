@@ -124,6 +124,10 @@ class JevAnchorAdvisor:
     def __init__(self, client: JevClient, journal, guardian, pinned: dict, model: str = JEV_MODEL):
         self.client, self.journal, self.guardian = client, journal, guardian
         self.pinned, self.model = dict(pinned), model
+        self.envelope = None
+
+    def set_envelope(self, env):
+        self.envelope = env
 
     def advise(self, ep: Episode, context: str, probe, memories: list[str],
                history: list[tuple[ConfigVector, Outcome]] = []) -> Recommendation:
@@ -148,6 +152,8 @@ class JevAnchorAdvisor:
         io_bound = float(a.get("io_bound", {}).get("noul", 0.5)) >= 0.5
         underprov = float(a.get("underprovisioned", {}).get("noul", 0.5)) >= 0.5
         cands = build_candidates(base, io_bound, underprov, self.guardian, seen)
+        if self.envelope is not None:
+            cands = [c for c in cands if self.envelope.check(c)[0]] or cands
         cost = float(diag.get("usage", {}).get("cost", 0.0) or 0.0)
         if not cands:
             self.journal.append({"kind": "llm_call", "model": self.model, "cost_usd": cost,

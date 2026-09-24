@@ -43,6 +43,21 @@ def build_deps(campaign_path: Path, root: Path = Path(".")) -> Deps:
             return BudgetedProbe(RemoteDuckDBProbe(probe_service["url"], tables))
         return BudgetedProbe(DuckDBProbe(tables, s3_config=s3_config))
 
+    # v4: sizer mede o snapshot Delta das tabelas da query no S3/MinIO (boto3),
+    # sem Spark. So faz sentido com backend real; sem bloco s3 -> None (v3).
+    sizer = None
+    if camp.get("backend") == "spark_k8s" and s3_config and tables_by_dataset:
+        try:
+            import boto3
+            from advisor_loop.sizing import Sizer
+            ep = s3_config["endpoint"]
+            s3 = boto3.client("s3", endpoint_url=ep if ep.startswith("http") else f"http://{ep}",
+                              aws_access_key_id=s3_config["key_id"],
+                              aws_secret_access_key=s3_config["secret"])
+            sizer = Sizer(s3, tables_by_dataset, root / "queries")
+        except Exception as e:  # noqa: BLE001
+            print(f"[sizing] sizer indisponivel: {e}", flush=True)
+
     if camp.get("backend") == "spark_k8s":
         backend = SparkK8sBackend(SparkSubmitter(
             ssh_cmd=spark_config["ssh_cmd"],
@@ -61,4 +76,5 @@ def build_deps(campaign_path: Path, root: Path = Path(".")) -> Deps:
     return Deps(client=OpenRouterClient(), journal=Journal(ev / "journal.jsonl"),
                 pack=pack, guardian=Guardian(pack.cluster),
                 backend=backend,
-                memory=MemoryStore(ev / "memory.jsonl"), probe_factory=probe_factory)
+                memory=MemoryStore(ev / "memory.jsonl"), probe_factory=probe_factory,
+                sizer=sizer)

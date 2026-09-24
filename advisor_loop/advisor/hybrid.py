@@ -79,6 +79,17 @@ class HybridAdvisor:
         if llm_every < 2:
             raise ValueError("llm_every deve ser >= 2 (senao nao ha passo numerico)")
         self.llm, self.guardian, self.llm_every = llm, guardian, llm_every
+        self.envelope = None
+
+    def set_envelope(self, env):
+        self.envelope = env
+        if hasattr(self.llm, "set_envelope"):
+            self.llm.set_envelope(env)
+
+    def _feasible(self, cand: ConfigVector) -> bool:
+        if not self.guardian.validate(cand)[0]:
+            return False
+        return self.envelope is None or self.envelope.check(cand)[0]
 
     def advise(self, ep: Episode, context: str, probe, memories: list[str],
                history: list[tuple[ConfigVector, Outcome]] = []) -> Recommendation:
@@ -134,7 +145,7 @@ class HybridAdvisor:
                 if f > 1 and (cand.executor_memory_gb > CONSOLIDATE_MAX_MEM_GB
                               or cand.executor_instances < CONSOLIDATE_MIN_INSTANCES):
                     continue
-                if not self.guardian.validate(cand)[0]:
+                if not self._feasible(cand):
                     continue
                 return _rec(cand, f"consolidacao x{f:g}: {best_cv.executor_cores}c x "
                                   f"{best_cv.executor_instances}w -> {cand.executor_cores}c x "
@@ -149,7 +160,7 @@ class HybridAdvisor:
                     if new == cur:
                         continue
                     cand = best_cv.model_copy(update={axis: new})
-                    if cand.config_hash() in seen or not self.guardian.validate(cand)[0]:
+                    if cand.config_hash() in seen or not self._feasible(cand):
                         continue
                     return _rec(cand, f"{axis} {cur}->{new} (passo {step:.0%})")
         return None

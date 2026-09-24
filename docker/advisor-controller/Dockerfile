@@ -22,6 +22,7 @@ COPY advisor_loop/ advisor_loop/
 COPY spark_advisor/ spark_advisor/
 COPY packs/ packs/
 COPY campaigns/ campaigns/
+COPY queries/ queries/
 COPY docker/advisor-controller/datasets.cluster.yaml datasets.yaml
 COPY docker/advisor-controller/upload_results.py upload_results.py
 COPY docker/advisor-controller/entrypoint.sh entrypoint.sh

@@ -140,6 +140,11 @@ class FreeRandomAdvisor:
         if knobs not in ("free", "matrix3"):
             raise ValueError(f"knobs desconhecido: {knobs!r} (use 'free' ou 'matrix3')")
         self.knobs = knobs
+        self.envelope = None
+
+    def set_envelope(self, env):
+        """v4: amostra so dentro do envelope de escala (rejection sampling)."""
+        self.envelope = env
 
     def _sample(self, rng) -> ConfigVector:
         if self.knobs == "matrix3":
@@ -156,6 +161,8 @@ class FreeRandomAdvisor:
         rng = random.Random(f"{self.seed}|{ep.dataset}|{ep.queries[0]}|{len(history)}")
         for _ in range(2000):
             cfg = self._sample(rng)
+            if self.envelope is not None and not self.envelope.check(cfg)[0]:
+                continue
             if self.guardian.validate(cfg)[0] and cfg.config_hash() not in seen:
                 return Recommendation(config=cfg,
                                       rationale=f"free-random trial #{len(history) + 1}")

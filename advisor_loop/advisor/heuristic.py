@@ -72,11 +72,24 @@ class HeuristicAnchorAdvisor:
 
     def __init__(self, guardian, pinned: dict):
         self.guardian, self.pinned = guardian, dict(pinned)
+        self.envelope = None
+
+    def set_envelope(self, env):
+        self.envelope = env
 
     def advise(self, ep: Episode, context: str, probe, memories: list[str],
                history: list[tuple[ConfigVector, Outcome]] = []) -> Recommendation:
         prof = parse_profile(context)
+        if self.envelope is not None:
+            # v4: sem perfil (baseline falhou) o envelope ainda dimensiona; com
+            # perfil, o envelope so impoe os pisos.
+            if "cpu_core_s" not in prof:
+                prof = {"cpu_core_s": self.envelope.target_cores * TARGET_S,
+                        "shuffle_bytes": prof.get("shuffle_bytes",
+                                                  self.envelope.data_gb * 0.1 * 1024 ** 3)}
         cfg = heuristic_anchor(prof, self.pinned, self.guardian)
+        if self.envelope is not None and not self.envelope.check(cfg)[0]:
+            cfg = self.envelope.baseline(self.pinned, self.guardian.cluster)
         why = (f"A0 heuristico: cpu={prof.get('cpu_core_s', '?')} core-s, "
                f"shuffle={prof.get('shuffle_bytes', 0) / 1024 ** 3:.1f}GB -> "
                f"{cfg.executor_cores}c x {cfg.executor_instances}w x {cfg.executor_memory_gb}g")

@@ -52,7 +52,11 @@ class SparkSubmitter:
         return self.runner(self.ssh_cmd + [remote_cmd], capture_output=True, text=True)
 
     def submit(self, config: ConfigVector, sf: str, query: str, run_id: str,
-               tries: int = 1) -> dict:
+               tries: int = 1, wall_clock_s: float | None = None) -> dict:
+        # wall_clock_s (v4): teto POR EXECUCAO relativo a baseline; None -> o teto
+        # absoluto do submitter. Multiplicado por (tries+1) como antes.
+        per_run = self.max_wall_clock_s if wall_clock_s is None else min(wall_clock_s,
+                                                                         self.max_wall_clock_s)
         # deploy-mode cluster: o pod launcher roda spark-submit (bloqueante via
         # waitAppCompletion) e CRIA um pod driver separado. O marcador
         # ADVISOR_RESULT sai no stdout do DRIVER, nao do launcher.
@@ -75,12 +79,12 @@ class SparkSubmitter:
             # de wall clock escala junto, senao um baseline lento (q23 default
             # 1 executor: ~350s x 4) estoura os 1200s e vira timeout -> baseline
             # None (aconteceu no replay do oraculo).
-            phase = self._poll(launcher_pod, self.max_wall_clock_s * max(1, tries + 1))
+            phase = self._poll(launcher_pod, per_run * max(1, tries + 1))
 
             if phase == "timeout":
                 return {"status": "failed", "duration_ms": None, "metrics": {},
                         "error": f"timeout waiting for pod {launcher_pod} "
-                                 f"(>{self.max_wall_clock_s * max(1, tries + 1)}s)"}
+                                 f"(>{per_run * max(1, tries + 1):.0f}s)"}
 
             # logs do DRIVER carregam o ADVISOR_RESULT; fallback p/ launcher se o
             # driver nem chegou a ser criado (ex.: erro de submit/imagem no launcher).

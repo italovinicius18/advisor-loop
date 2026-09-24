@@ -15,6 +15,7 @@ class Deps:
     backend: object
     memory: object
     probe_factory: object       # (episode) -> BudgetedProbe | None
+    sizer: object = None        # v4: (episode) -> sizing.Envelope | None
 
 
 def run_campaign(campaign_path: str | Path, deps: Deps) -> dict:
@@ -123,7 +124,9 @@ def _run_optimize_campaign(camp: dict, deps: Deps, adv: Advisor) -> dict:
         raise ValueError(f"arm desconhecido: {arm!r} (use 'llm', 'random', 'hybrid' ou 'fixed')")
     tries = camp.get("tries", 1)
     from advisor_loop.episode import ConfigVector
-    baseline_cfg = ConfigVector(**camp["baseline_config"]) if camp.get("baseline_config") else None
+    from advisor_loop.advisor.advisor import PINNED_MATRIX
+    explicit_baseline = ConfigVector(**camp["baseline_config"]) if camp.get("baseline_config") else None
+    pinned = dict(PINNED_MATRIX, **(camp.get("pinned") or {}))
     ran = skipped = 0
     cost = 0.0
     for dataset in camp["datasets"]:
@@ -135,9 +138,21 @@ def _run_optimize_campaign(camp: dict, deps: Deps, adv: Advisor) -> dict:
             if deps.journal.has(ek):        # config-independent: nunca re-executa no resume
                 skipped += 1
                 continue
+            # v4: envelope de escala por (dataset, query) -> baseline dimensionada
+            # (a menos que a campanha fixe baseline_config), pisos no Guardian e
+            # amostragem/ancoras dentro do envelope. Sem sizer -> comportamento v3.
+            env = deps.sizer(ep) if getattr(deps, "sizer", None) else None
+            baseline_cfg = explicit_baseline
+            if baseline_cfg is None and env is not None:
+                baseline_cfg = env.baseline(pinned, deps.guardian.cluster)
+            if env is not None:
+                deps.journal.append({"kind": "envelope", "dataset": dataset, "query": query,
+                                     "data_gb": env.data_gb, "tables_gb": env.tables_gb,
+                                     "floor_mem_gb": env.floor_mem_gb, "floor_cores": env.floor_cores,
+                                     "baseline": baseline_cfg.model_dump()})
             result = optimize(ep, deps, advisor, max_iters=camp.get("max_iters", 4),
                               patience=camp.get("patience", 2), tries=tries,
-                              baseline_cfg=baseline_cfg)
+                              baseline_cfg=baseline_cfg, envelope=env)
             deps.journal.append({"kind": "opt_result", "task_key": ek, "arm": arm,
                                  "query": query, "dataset": dataset,
                                  "provider": ep.provider, "level": ep.level,
