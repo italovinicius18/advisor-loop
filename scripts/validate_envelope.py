@@ -16,7 +16,16 @@ from advisor_loop.loop import DEFAULT_CFG
 from advisor_loop.sizing import make_envelope
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_DATA = {10: 8.7, 50: 42, 100: 84, 250: 200, 500: 420, 750: 336, 1000: 479}
+# volume POR QUERY medido no MinIO (snapshot Delta atual), 2026-09-24
+DEFAULT_DATA = {
+    (10, "q03"): 1.7, (10, "q23"): 3.6, (10, "q50"): 1.9,
+    (50, "q03"): 8.3, (50, "q23"): 17.9, (50, "q50"): 9.2,
+    (100, "q03"): 16.8, (100, "q23"): 36.6, (100, "q50"): 18.7,
+    (250, "q03"): 41.5, (250, "q23"): 89.6, (250, "q50"): 46.5,
+    (500, "q03"): 78.5, (500, "q23"): 173.1, (500, "q50"): 88.0,
+    (750, "q03"): 118.3, (750, "q23"): 261.0, (750, "q50"): 132.8,
+    (1000, "q03"): 169.0, (1000, "q23"): 369.1, (1000, "q50"): 189.6,
+}
 CAPS = {"max_cores_per_container": 24, "max_memory_gb_per_container": 96,
         "max_pods": 40, "total_cores": 120, "total_memory_gb": 400}
 
@@ -24,19 +33,20 @@ CAPS = {"max_cores_per_container": 24, "max_memory_gb_per_container": 96,
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--matrix", default=str(ROOT / "data/matrix/training_data.parquet"))
-    ap.add_argument("--data-gb", nargs="*", default=[], help="sf=gb overrides")
+    ap.add_argument("--data-gb", nargs="*", default=[], help="sf:query=gb overrides")
     a = ap.parse_args()
     data = dict(DEFAULT_DATA)
     for kv in a.data_gb:
         k, v = kv.split("=")
-        data[int(k)] = float(v)
+        sf, q = k.split(":")
+        data[(int(sf), q)] = float(v)
     con = duckdb.connect()
     print(f"{'sf':>5} {'query':5} {'data_gb':>7} {'piso mem/cores':>15} {'menor celula ok':>16} {'passa':>5} "
           f"{'default':>7} {'baseline v4':>16} {'falhas matriz':>13}")
-    for sf, gb in sorted(data.items()):
+    for (sf, q), gb in sorted(data.items()):
         env = make_envelope(gb)
         base = env.baseline(PINNED_MATRIX, CAPS)
-        for q in ("q03", "q23", "q50"):
+        if True:
             row = con.execute(
                 "SELECT executor_cores, CAST(executor_memory_gb AS INT), workers, workers*executor_memory_gb AS m "
                 "FROM read_parquet(?) WHERE status='success' AND CAST(scale_factor AS INT)=? AND query=? "

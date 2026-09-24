@@ -19,8 +19,18 @@ from tests.test_loop_tries import _Deps
 CAPS = {"max_cores_per_container": 24, "max_memory_gb_per_container": 96,
         "max_pods": 40, "total_cores": 120, "total_memory_gb": 400}
 MATRIX = pathlib.Path(__file__).resolve().parents[1] / "data/matrix/training_data.parquet"
-# volumes Delta atuais aproximados por SF (GiB) -- sf500 estimado (mc du = 812 c/ versoes velhas)
-DATA_GB = {10: 8.7, 50: 42, 100: 84, 250: 200, 500: 420, 750: 336, 1000: 479}
+MEASURED_GB = {  # snapshot Delta atual das tabelas de cada query (MinIO, 2026-09-24)
+    (10, "q03"): 1.7, (10, "q23"): 3.6, (10, "q50"): 1.9,
+    (50, "q03"): 8.3, (50, "q23"): 17.9, (50, "q50"): 9.2,
+    (100, "q03"): 16.8, (100, "q23"): 36.6, (100, "q50"): 18.7,
+    (250, "q03"): 41.5, (250, "q23"): 89.6, (250, "q50"): 46.5,
+    (500, "q03"): 78.5, (500, "q23"): 173.1, (500, "q50"): 88.0,
+    (750, "q03"): 118.3, (750, "q23"): 261.0, (750, "q50"): 132.8,
+    (1000, "q03"): 169.0, (1000, "q23"): 369.1, (1000, "q50"): 189.6,
+}
+# onde o default 8c x 1w x 8g NAO completou no nosso harness (200 min) -> deve ser rejeitado
+DEFAULT_FAILED = {(500, "q23"), (500, "q50")} | {(sf, q) for sf in (750, 1000) for q in ("q03", "q23", "q50")}
+DEFAULT_BORDERLINE = {(250, "q23")}   # completou em 27 min; rejeitar e aceitavel
 
 
 class FakeS3:
@@ -71,35 +81,39 @@ def test_delta_snapshot_with_checkpoint_falls_back_to_listing():
     assert per["t"] * 1024 ** 3 == 1000
 
 
-def test_envelope_floors_admit_matrix_minima_and_reject_spark_default_at_scale():
+def test_envelope_floors_admit_matrix_minima_and_reject_spark_default_where_it_failed():
     con = duckdb.connect()
-    for sf, gb in DATA_GB.items():
+    for (sf, q), gb in MEASURED_GB.items():
         env = make_envelope(gb)
-        for q in ("q03", "q23", "q50"):
-            row = con.execute(
-                "SELECT executor_cores, CAST(executor_memory_gb AS INT), workers, workers*executor_memory_gb AS m "
-                "FROM read_parquet(?) WHERE status='success' AND CAST(scale_factor AS INT)=? AND query=? "
-                "ORDER BY m LIMIT 1", [str(MATRIX), sf, q]).fetchone()
-            c, m, w, _ = row
-            cell = ConfigVector(executor_cores=int(c), executor_memory_gb=int(m), executor_instances=int(w), **PINNED_MATRIX)
-            assert env.check(cell)[0], f"sf{sf} {q}: menor celula que completou ({c}cx{w}wx{m}g) rejeitada pelo piso"
+        row = con.execute(
+            "SELECT executor_cores, CAST(executor_memory_gb AS INT), workers, workers*executor_memory_gb AS m "
+            "FROM read_parquet(?) WHERE status='success' AND CAST(scale_factor AS INT)=? AND query=? "
+            "ORDER BY m LIMIT 1", [str(MATRIX), sf, q]).fetchone()
+        c, m, w, _ = row
+        cell = ConfigVector(executor_cores=int(c), executor_memory_gb=int(m), executor_instances=int(w), **PINNED_MATRIX)
+        assert env.check(cell)[0], f"sf{sf} {q}: menor celula que completou ({c}cx{w}wx{m}g) rejeitada pelo piso"
         default_ok = env.check(DEFAULT_CFG)[0]
-        assert default_ok == (sf < 500), f"sf{sf}: default 8c x 1w x 8g deveria ser {'aceito' if sf < 500 else 'rejeitado'}"
+        if (sf, q) in DEFAULT_FAILED:
+            assert not default_ok, f"sf{sf} {q}: default deveria ser rejeitado (estourou 200 min)"
+        elif (sf, q) not in DEFAULT_BORDERLINE:
+            assert default_ok, f"sf{sf} {q}: default completou e foi rejeitado"
 
 
 def test_envelope_baseline_is_inside_and_scales():
-    for sf, gb in DATA_GB.items():
+    for (sf, q), gb in MEASURED_GB.items():
         env = make_envelope(gb)
         b = env.baseline(PINNED_MATRIX, CAPS)
         assert env.check(b)[0] and Guardian(CAPS).validate(b)[0]
         assert b.executor_cores == 4 and b.shuffle_partitions == 200
-    small, big = make_envelope(8.7).baseline(PINNED_MATRIX, CAPS), make_envelope(479).baseline(PINNED_MATRIX, CAPS)
+    small = make_envelope(MEASURED_GB[(10, "q03")]).baseline(PINNED_MATRIX, CAPS)
+    big = make_envelope(MEASURED_GB[(1000, "q23")]).baseline(PINNED_MATRIX, CAPS)
     assert small.executor_instances * small.executor_memory_gb < big.executor_instances * big.executor_memory_gb
-    assert big.executor_memory_gb >= 12                     # 3 GB/core acima de 150 GB
+    # q23@sf1000 (369 GB): 4 GB/core -> 4c x 12w x 16g = 192 GB = menor celula que completou na matriz
+    assert (big.executor_memory_gb, big.executor_instances) == (16, 12)
 
 
 def test_random_samples_inside_envelope():
-    env = make_envelope(420)
+    env = make_envelope(173)
     adv = FreeRandomAdvisor(Guardian(CAPS), seed=1)
     adv.set_envelope(env)
     ep = Episode(workload="w", dataset="sf500", queries=["q23"], provider="m")
@@ -134,13 +148,13 @@ class _Adv:
 
 
 def test_loop_uses_envelope_for_context_validation_and_relative_timeout():
-    env = make_envelope(420)
+    env = make_envelope(173)
     be, adv = _Backend(), _Adv()
     ep = Episode(workload="w", dataset="sf500", queries=["q23"], provider="m")
     r = optimize(ep, _Deps(be), adv, max_iters=2, patience=3, tries=3,
                  baseline_cfg=env.baseline(PINNED_MATRIX, CAPS), envelope=env)
     assert adv.env is env
-    assert "Envelope de escala" in adv.ctx[0] and "420" in adv.ctx[0]
+    assert "Envelope de escala" in adv.ctx[0] and "173" in adv.ctx[0]
     assert r["iterations"][0]["status"] == "invalid_recommendation"
     assert "escala" in r["iterations"][0]["reason"]
     assert r["iterations"][1]["status"] == "completed"

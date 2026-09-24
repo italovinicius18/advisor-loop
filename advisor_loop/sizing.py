@@ -14,12 +14,17 @@ menores celulas que completaram na matriz -- a matriz nunca entra no loop):
   baseline  : mem total alvo = max(16, 0.25 x data_gb); cores totais alvo =
               max(8, data_gb / 8); executores de 4c com 2 GB/core (3 GB/core
               acima de 150 GB) -> a menor config "razoavel" dentro do envelope.
-  guardian  : piso duro (rejeita antes de gastar horas): mem total >= 0.04 x
-              data_gb, cores totais >= data_gb / 64, mem/executor >= 8 GB se
-              data_gb >= 5. Calibrado para ACEITAR tudo que completou na matriz
-              (inclusive o default 8c x 1w x 8g ate sf250, que completa em ~27
-              min) e REJEITAR o default a partir de sf500 (onde estourou 200
-              min). Acima do piso o proponente tem toda a liberdade.
+  guardian  : piso duro (rejeita antes de gastar horas): mem total >= 0.10 x
+              data_gb, cores totais >= data_gb / 32, mem/executor >= 8 GB se
+              data_gb >= 5. `data_gb` e o volume POR QUERY (tabelas que ela
+              toca; medido: sf500 q03 78 / q23 173 / q50 88 GB). Calibrado para
+              ACEITAR toda menor celula que completou na matriz e REJEITAR o
+              default 8c x 1w x 8g onde ele estourou 200 min (sf500 q23/q50,
+              sf>=750); em sf250 q23 (90 GB) o default completou em 27 min e
+              fica na borda (rejeitado: 9 GB de piso) -- custo zero.
+  mem/core  : 2 GB (<100 GB), 3 GB (100-300 GB), 4 GB (>=300 GB) -> a baseline
+              de q23@sf1000 (369 GB) sai 4c x 12w x 16g = 192 GB, a menor
+              celula que completou la na matriz.
   timeout   : teto por proposta = max(3 x baseline, 20 min) (ver loop.py).
 """
 from __future__ import annotations
@@ -165,14 +170,14 @@ class Envelope:
 
 
 def make_envelope(data_gb: float, tables_gb: dict | None = None) -> Envelope:
-    big = data_gb >= 150
+    mpc = 4 if data_gb >= 300 else (3 if data_gb >= 100 else 2)
     return Envelope(
         data_gb=data_gb, tables_gb=tables_gb or {},
         target_mem_gb=max(16.0, 0.25 * data_gb),
         target_cores=max(8, int(math.ceil(data_gb / 8))),
-        mem_per_core_gb=3 if big else 2,
-        floor_mem_gb=0.04 * data_gb,
-        floor_cores=max(1, int(math.ceil(data_gb / 64))),
+        mem_per_core_gb=mpc,
+        floor_mem_gb=0.10 * data_gb,
+        floor_cores=max(1, int(math.ceil(data_gb / 32))),
         floor_exec_mem_gb=8 if data_gb >= 5 else 4,
     )
 

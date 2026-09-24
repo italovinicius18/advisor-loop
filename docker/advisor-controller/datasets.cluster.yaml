@@ -16,6 +16,8 @@ probe_service:
   # MinIO: o controller roda em ids-pb (NXDOMAIN p/ *.cluster.local), entao o
   # ClusterIP do svc duckdb-probe entra por IP, nao pelo nome DNS.
   url: http://10.50.197.129:8000
+# Mapas de tabelas por SF: usados pelo Sizer v4 (volume Delta por query) e pelo
+# probe L1. Mesmos 24 nomes; so muda o prefixo.
 sf100:
   call_center: s3://silver/sf100/delta/parquet/call_center
   catalog_page: s3://silver/sf100/delta/parquet/catalog_page
@@ -41,6 +43,156 @@ sf100:
   web_returns: s3://silver/sf100/delta/parquet/web_returns
   web_sales: s3://silver/sf100/delta/parquet/web_sales
   web_site: s3://silver/sf100/delta/parquet/web_site
+sf10:
+  call_center: s3://silver/sf10/delta/parquet/call_center
+  catalog_page: s3://silver/sf10/delta/parquet/catalog_page
+  catalog_returns: s3://silver/sf10/delta/parquet/catalog_returns
+  catalog_sales: s3://silver/sf10/delta/parquet/catalog_sales
+  customer: s3://silver/sf10/delta/parquet/customer
+  customer_address: s3://silver/sf10/delta/parquet/customer_address
+  customer_demographics: s3://silver/sf10/delta/parquet/customer_demographics
+  date_dim: s3://silver/sf10/delta/parquet/date_dim
+  household_demographics: s3://silver/sf10/delta/parquet/household_demographics
+  income_band: s3://silver/sf10/delta/parquet/income_band
+  inventory: s3://silver/sf10/delta/parquet/inventory
+  item: s3://silver/sf10/delta/parquet/item
+  promotion: s3://silver/sf10/delta/parquet/promotion
+  reason: s3://silver/sf10/delta/parquet/reason
+  ship_mode: s3://silver/sf10/delta/parquet/ship_mode
+  store: s3://silver/sf10/delta/parquet/store
+  store_returns: s3://silver/sf10/delta/parquet/store_returns
+  store_sales: s3://silver/sf10/delta/parquet/store_sales
+  time_dim: s3://silver/sf10/delta/parquet/time_dim
+  warehouse: s3://silver/sf10/delta/parquet/warehouse
+  web_page: s3://silver/sf10/delta/parquet/web_page
+  web_returns: s3://silver/sf10/delta/parquet/web_returns
+  web_sales: s3://silver/sf10/delta/parquet/web_sales
+  web_site: s3://silver/sf10/delta/parquet/web_site
+sf50:
+  call_center: s3://silver/sf50/delta/parquet/call_center
+  catalog_page: s3://silver/sf50/delta/parquet/catalog_page
+  catalog_returns: s3://silver/sf50/delta/parquet/catalog_returns
+  catalog_sales: s3://silver/sf50/delta/parquet/catalog_sales
+  customer: s3://silver/sf50/delta/parquet/customer
+  customer_address: s3://silver/sf50/delta/parquet/customer_address
+  customer_demographics: s3://silver/sf50/delta/parquet/customer_demographics
+  date_dim: s3://silver/sf50/delta/parquet/date_dim
+  household_demographics: s3://silver/sf50/delta/parquet/household_demographics
+  income_band: s3://silver/sf50/delta/parquet/income_band
+  inventory: s3://silver/sf50/delta/parquet/inventory
+  item: s3://silver/sf50/delta/parquet/item
+  promotion: s3://silver/sf50/delta/parquet/promotion
+  reason: s3://silver/sf50/delta/parquet/reason
+  ship_mode: s3://silver/sf50/delta/parquet/ship_mode
+  store: s3://silver/sf50/delta/parquet/store
+  store_returns: s3://silver/sf50/delta/parquet/store_returns
+  store_sales: s3://silver/sf50/delta/parquet/store_sales
+  time_dim: s3://silver/sf50/delta/parquet/time_dim
+  warehouse: s3://silver/sf50/delta/parquet/warehouse
+  web_page: s3://silver/sf50/delta/parquet/web_page
+  web_returns: s3://silver/sf50/delta/parquet/web_returns
+  web_sales: s3://silver/sf50/delta/parquet/web_sales
+  web_site: s3://silver/sf50/delta/parquet/web_site
+sf250:
+  call_center: s3://silver/sf250/delta/parquet/call_center
+  catalog_page: s3://silver/sf250/delta/parquet/catalog_page
+  catalog_returns: s3://silver/sf250/delta/parquet/catalog_returns
+  catalog_sales: s3://silver/sf250/delta/parquet/catalog_sales
+  customer: s3://silver/sf250/delta/parquet/customer
+  customer_address: s3://silver/sf250/delta/parquet/customer_address
+  customer_demographics: s3://silver/sf250/delta/parquet/customer_demographics
+  date_dim: s3://silver/sf250/delta/parquet/date_dim
+  household_demographics: s3://silver/sf250/delta/parquet/household_demographics
+  income_band: s3://silver/sf250/delta/parquet/income_band
+  inventory: s3://silver/sf250/delta/parquet/inventory
+  item: s3://silver/sf250/delta/parquet/item
+  promotion: s3://silver/sf250/delta/parquet/promotion
+  reason: s3://silver/sf250/delta/parquet/reason
+  ship_mode: s3://silver/sf250/delta/parquet/ship_mode
+  store: s3://silver/sf250/delta/parquet/store
+  store_returns: s3://silver/sf250/delta/parquet/store_returns
+  store_sales: s3://silver/sf250/delta/parquet/store_sales
+  time_dim: s3://silver/sf250/delta/parquet/time_dim
+  warehouse: s3://silver/sf250/delta/parquet/warehouse
+  web_page: s3://silver/sf250/delta/parquet/web_page
+  web_returns: s3://silver/sf250/delta/parquet/web_returns
+  web_sales: s3://silver/sf250/delta/parquet/web_sales
+  web_site: s3://silver/sf250/delta/parquet/web_site
+sf500:
+  call_center: s3://silver/sf500/delta/parquet/call_center
+  catalog_page: s3://silver/sf500/delta/parquet/catalog_page
+  catalog_returns: s3://silver/sf500/delta/parquet/catalog_returns
+  catalog_sales: s3://silver/sf500/delta/parquet/catalog_sales
+  customer: s3://silver/sf500/delta/parquet/customer
+  customer_address: s3://silver/sf500/delta/parquet/customer_address
+  customer_demographics: s3://silver/sf500/delta/parquet/customer_demographics
+  date_dim: s3://silver/sf500/delta/parquet/date_dim
+  household_demographics: s3://silver/sf500/delta/parquet/household_demographics
+  income_band: s3://silver/sf500/delta/parquet/income_band
+  inventory: s3://silver/sf500/delta/parquet/inventory
+  item: s3://silver/sf500/delta/parquet/item
+  promotion: s3://silver/sf500/delta/parquet/promotion
+  reason: s3://silver/sf500/delta/parquet/reason
+  ship_mode: s3://silver/sf500/delta/parquet/ship_mode
+  store: s3://silver/sf500/delta/parquet/store
+  store_returns: s3://silver/sf500/delta/parquet/store_returns
+  store_sales: s3://silver/sf500/delta/parquet/store_sales
+  time_dim: s3://silver/sf500/delta/parquet/time_dim
+  warehouse: s3://silver/sf500/delta/parquet/warehouse
+  web_page: s3://silver/sf500/delta/parquet/web_page
+  web_returns: s3://silver/sf500/delta/parquet/web_returns
+  web_sales: s3://silver/sf500/delta/parquet/web_sales
+  web_site: s3://silver/sf500/delta/parquet/web_site
+sf750:
+  call_center: s3://silver/sf750/delta/parquet/call_center
+  catalog_page: s3://silver/sf750/delta/parquet/catalog_page
+  catalog_returns: s3://silver/sf750/delta/parquet/catalog_returns
+  catalog_sales: s3://silver/sf750/delta/parquet/catalog_sales
+  customer: s3://silver/sf750/delta/parquet/customer
+  customer_address: s3://silver/sf750/delta/parquet/customer_address
+  customer_demographics: s3://silver/sf750/delta/parquet/customer_demographics
+  date_dim: s3://silver/sf750/delta/parquet/date_dim
+  household_demographics: s3://silver/sf750/delta/parquet/household_demographics
+  income_band: s3://silver/sf750/delta/parquet/income_band
+  inventory: s3://silver/sf750/delta/parquet/inventory
+  item: s3://silver/sf750/delta/parquet/item
+  promotion: s3://silver/sf750/delta/parquet/promotion
+  reason: s3://silver/sf750/delta/parquet/reason
+  ship_mode: s3://silver/sf750/delta/parquet/ship_mode
+  store: s3://silver/sf750/delta/parquet/store
+  store_returns: s3://silver/sf750/delta/parquet/store_returns
+  store_sales: s3://silver/sf750/delta/parquet/store_sales
+  time_dim: s3://silver/sf750/delta/parquet/time_dim
+  warehouse: s3://silver/sf750/delta/parquet/warehouse
+  web_page: s3://silver/sf750/delta/parquet/web_page
+  web_returns: s3://silver/sf750/delta/parquet/web_returns
+  web_sales: s3://silver/sf750/delta/parquet/web_sales
+  web_site: s3://silver/sf750/delta/parquet/web_site
+sf1000:
+  call_center: s3://silver/sf1000/delta/parquet/call_center
+  catalog_page: s3://silver/sf1000/delta/parquet/catalog_page
+  catalog_returns: s3://silver/sf1000/delta/parquet/catalog_returns
+  catalog_sales: s3://silver/sf1000/delta/parquet/catalog_sales
+  customer: s3://silver/sf1000/delta/parquet/customer
+  customer_address: s3://silver/sf1000/delta/parquet/customer_address
+  customer_demographics: s3://silver/sf1000/delta/parquet/customer_demographics
+  date_dim: s3://silver/sf1000/delta/parquet/date_dim
+  household_demographics: s3://silver/sf1000/delta/parquet/household_demographics
+  income_band: s3://silver/sf1000/delta/parquet/income_band
+  inventory: s3://silver/sf1000/delta/parquet/inventory
+  item: s3://silver/sf1000/delta/parquet/item
+  promotion: s3://silver/sf1000/delta/parquet/promotion
+  reason: s3://silver/sf1000/delta/parquet/reason
+  ship_mode: s3://silver/sf1000/delta/parquet/ship_mode
+  store: s3://silver/sf1000/delta/parquet/store
+  store_returns: s3://silver/sf1000/delta/parquet/store_returns
+  store_sales: s3://silver/sf1000/delta/parquet/store_sales
+  time_dim: s3://silver/sf1000/delta/parquet/time_dim
+  warehouse: s3://silver/sf1000/delta/parquet/warehouse
+  web_page: s3://silver/sf1000/delta/parquet/web_page
+  web_returns: s3://silver/sf1000/delta/parquet/web_returns
+  web_sales: s3://silver/sf1000/delta/parquet/web_sales
+  web_site: s3://silver/sf1000/delta/parquet/web_site
 spark:
   ssh_cmd: [bash, -c]        # exec local no pod (sem SSH); kubectl usa a SA in-cluster
   # r10: tries em sessao + warm-up (harness quente); r9: driver coleta cpu/run time, tasks/stages, skew e resumo do plano fisico
