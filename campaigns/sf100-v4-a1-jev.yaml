@@ -1,0 +1,16 @@
+# Escada de ancoras sob v4.1 -- A1: TypeSafe Jev (Decisions API) escolhe entre candidatos.
+name: sf100-v4-a1-jev
+mode: optimize
+backend: spark_k8s
+arm: hybrid
+llm_every: 3
+knobs: matrix3
+level: L0
+anchor: jev
+jev_model: typesafe/jev-1.13
+provider: typesafe/jev-1.13
+datasets: [sf100]
+queries: [q03, q23, q50]
+tries: 3
+max_iters: 8
+patience: 3

@@ -1,0 +1,15 @@
+# Escada de ancoras sob v4.1 -- A3: Claude Sonnet 5 (referencia).
+name: sf100-v4-a3-sonnet
+mode: optimize
+backend: spark_k8s
+arm: hybrid
+llm_every: 3
+knobs: matrix3
+level: L0
+anchor: llm
+provider: anthropic/claude-sonnet-5
+datasets: [sf100]
+queries: [q03, q23, q50]
+tries: 3
+max_iters: 8
+patience: 3

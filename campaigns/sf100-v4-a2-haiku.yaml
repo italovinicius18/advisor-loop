@@ -1,0 +1,15 @@
+# Escada de ancoras sob v4.1 -- A2: Claude Haiku 4.5, mesmo prompt do A3.
+name: sf100-v4-a2-haiku
+mode: optimize
+backend: spark_k8s
+arm: hybrid
+llm_every: 3
+knobs: matrix3
+level: L0
+anchor: llm
+provider: anthropic/claude-haiku-4.5
+datasets: [sf100]
+queries: [q03, q23, q50]
+tries: 3
+max_iters: 8
+patience: 3

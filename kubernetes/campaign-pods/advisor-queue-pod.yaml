@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: advisor-queue
+  namespace: italo-unb
+  labels:
+    app: advisor-queue
+spec:
+  serviceAccountName: ns-admin
+  restartPolicy: Never
+  imagePullSecrets:
+    - name: ghcr-pull
+  nodeSelector:
+    kubernetes.io/hostname: ids-pb
+  containers:
+    - name: queue
+      image: ghcr.io/italovinicius18/advisor-controller:sf100-r10
+      imagePullPolicy: IfNotPresent
+      command: ["bash", "/queue/queue_incluster.sh"]
+      resources:
+        requests: {memory: "64Mi", cpu: "50m"}
+        limits: {memory: "128Mi", cpu: "100m"}
+      volumeMounts:
+        - name: queue
+          mountPath: /queue
+  volumes:
+    - name: queue
+      configMap:
+        name: advisor-queue

@@ -86,10 +86,20 @@ class HybridAdvisor:
         if hasattr(self.llm, "set_envelope"):
             self.llm.set_envelope(env)
 
-    def _feasible(self, cand: ConfigVector) -> bool:
+    def _feasible(self, cand: ConfigVector, failed=()) -> bool:
         if not self.guardian.validate(cand)[0]:
             return False
+        if self._dominated_by_failure(cand, failed):
+            return False
         return self.envelope is None or self.envelope.check(cand)[0]
+
+    @staticmethod
+    def _dominated_by_failure(cand: ConfigVector, failed) -> bool:
+        """v4.1: mesmo formato (cores, instancias) que ja falhou com memoria >=
+        a da candidata -> nao repropor (sf750 q23: 4c x 20w x 16g e depois
+        4c x 20w x 14g abortaram no shuffle, ~50 min cada)."""
+        return any(cand.executor_cores == c and cand.executor_instances == i
+                   and cand.executor_memory_gb <= m for c, i, m in failed)
 
     def advise(self, ep: Episode, context: str, probe, memories: list[str],
                history: list[tuple[ConfigVector, Outcome]] = []) -> Recommendation:
@@ -113,6 +123,9 @@ class HybridAdvisor:
     def numeric_step(self, history, succ) -> Recommendation | None:
         best_cv, best_qr = min(succ, key=lambda t: t[1].duration_ms)
         seen = {cv.config_hash() for cv, _ in history}
+        ok_hashes = {cv.config_hash() for cv, _ in succ}
+        failed = [(cv.executor_cores, cv.executor_instances, cv.executor_memory_gb)
+                  for cv, _ in history if cv.config_hash() not in ok_hashes]
         u = utilization(best_cv, best_qr.duration_ms, best_qr.metrics)
         m = best_qr.metrics or {}
         shuffle = max(m.get("shuffle_read_bytes") or 0, m.get("shuffle_write_bytes") or 0)
@@ -145,7 +158,7 @@ class HybridAdvisor:
                 if f > 1 and (cand.executor_memory_gb > CONSOLIDATE_MAX_MEM_GB
                               or cand.executor_instances < CONSOLIDATE_MIN_INSTANCES):
                     continue
-                if not self._feasible(cand):
+                if not self._feasible(cand, failed):
                     continue
                 return _rec(cand, f"consolidacao x{f:g}: {best_cv.executor_cores}c x "
                                   f"{best_cv.executor_instances}w -> {cand.executor_cores}c x "
@@ -160,7 +173,7 @@ class HybridAdvisor:
                     if new == cur:
                         continue
                     cand = best_cv.model_copy(update={axis: new})
-                    if cand.config_hash() in seen or not self._feasible(cand):
+                    if cand.config_hash() in seen or not self._feasible(cand, failed):
                         continue
                     return _rec(cand, f"{axis} {cur}->{new} (passo {step:.0%})")
         return None

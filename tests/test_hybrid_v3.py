@@ -77,3 +77,28 @@ def test_llm_repeating_seen_config_falls_through_to_numeric():
     assert llm.calls == 1
     assert r.config.config_hash() != ConfigVector(**CFG).config_hash()
     assert r.rationale.startswith("LLM repetiu config ja vista")
+
+
+def _fail(cfg):
+    return (ConfigVector(**cfg), Outcome(status="completed", per_query={"q": QueryResult(
+        status="failed", duration_ms=None, metrics={})}))
+
+
+def test_does_not_retry_failed_shape_with_less_or_equal_memory():
+    """sf750 q23 (25/09): 4c x 20w x 16g abortou no shuffle e o x0.5 seguinte
+    propos 4c x 20w x 14g -- mesmo formato, menos memoria, falhou de novo (~50 min
+    cada). Formato (cores, instancias) que falhou com memoria >= a da candidata
+    nao e reproposto."""
+    best = {**CFG, "executor_cores": 8, "executor_instances": 13, "executor_memory_gb": 28}
+    ok = _hist(best, 1486000, int(0.27 * 104 * 1486000), int(50 * GB))
+    x2, x4 = consolidate(ok[0], 2.0), consolidate(ok[0], 4.0)   # ja vistos -> vai ao x0.5
+    failed = {**CFG, "executor_cores": 4, "executor_instances": 20, "executor_memory_gb": 16}
+    hist = [ok, (x2, ok[1]), (x4, ok[1]), _fail(failed)]
+    assert consolidate(ok[0], 0.5).executor_instances == 20      # o x0.5 cairia no formato que falhou
+    hy = HybridAdvisor(LLM(CFG), Guardian(CAPS), llm_every=99)
+    c = hy.advise(None, "c", None, [], history=hist).config
+    assert not (c.executor_cores == 4 and c.executor_instances == 20 and c.executor_memory_gb <= 16)
+    # mais memoria no mesmo formato continua permitido
+    more = ConfigVector(**{**failed, "executor_memory_gb": 24})
+    assert HybridAdvisor._dominated_by_failure(more, [(4, 20, 16)]) is False
+    assert HybridAdvisor._dominated_by_failure(ConfigVector(**failed), [(4, 20, 16)]) is True
