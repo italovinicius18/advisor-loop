@@ -91,6 +91,31 @@ def test_median_drives_best_tracking():
     assert res["best_duration_ms"] == 8
 
 
+def test_failed_baseline_error_is_journaled():
+    # sf500 q23 (v4): baseline 4c x 6w x 12g falhou e a causa se perdeu porque
+    # o erro do baseline era descartado. Agora vai para o opt_result.
+    class _FailFirst(_ScriptedBackend):
+        def execute(self, ep, rec):
+            if not self.calls:
+                self.calls.append(("baseline", None))
+                return Outcome(status="error", per_query={"q": QueryResult(
+                    status="timeout", duration_ms=None, error="wall clock 12000s")})
+            return super().execute(ep, rec)
+
+    cfg = ConfigVector(**{**DEFAULT, "shuffle_partitions": 400})
+    res = optimize(_ep(), _Deps(_FailFirst([40])), _FixedAdvisor(cfg), max_iters=1, patience=1)
+    assert res["baseline_ms"] is None
+    assert res["baseline_error"] == {"query_status": "timeout", "error": "wall clock 12000s"}
+    assert res["best_duration_ms"] == 40
+
+
+def test_successful_baseline_has_no_error():
+    be = _ScriptedBackend([50, 40])
+    cfg = ConfigVector(**{**DEFAULT, "shuffle_partitions": 400})
+    res = optimize(_ep(), _Deps(be), _FixedAdvisor(cfg), max_iters=1, patience=1)
+    assert res["baseline_error"] is None
+
+
 def test_tries_default_one_is_backward_compatible():
     be = _ScriptedBackend([50, 40])   # iter0 default, iter1 proposal, single try each
     cfg = ConfigVector(**{**DEFAULT, "shuffle_partitions": 400})

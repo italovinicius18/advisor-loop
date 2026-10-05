@@ -57,6 +57,27 @@ def test_harness_oracle_from_replay_journal(tmp_path):
     assert abs(rep["summary"]["llm"]["median_regret_harness"] - 0.5) < 1e-9
 
 
+def test_harness_oracle_takes_min_over_topk_replays(tmp_path):
+    import json
+    from analysis.report import harness_oracle_table
+    def _j(name, rows):
+        p = tmp_path / name
+        p.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+        return str(p)
+    r1 = _j("r1.jsonl", [
+        {"kind": "opt_result", "dataset": "sf100", "query": "q03", "best_duration_ms": 27000.0},
+        {"kind": "opt_result", "dataset": "sf100", "query": "q23", "best_duration_ms": None}])
+    r2 = _j("r2.jsonl", [
+        {"kind": "opt_result", "dataset": "sf100", "query": "q03", "best_duration_ms": 24000.0},
+        {"kind": "opt_result", "dataset": "sf100", "query": "q23", "best_duration_ms": 190000.0}])
+    r3 = _j("r3.jsonl", [
+        {"kind": "opt_result", "dataset": "sf100", "query": "q03", "best_duration_ms": 30000.0}])
+    oh = harness_oracle_table([r1, r2, r3])
+    # a regua e a melhor celula do top-k NO HARNESS, nao a vencedora da matriz
+    assert oh == {(100, "q03"): 24000.0, (100, "q23"): 190000.0}
+    assert harness_oracle_table(r1) == {(100, "q03"): 27000.0}    # str unico ainda funciona
+
+
 def test_build_report():
     ors = {(100, "q23"): 100.0}
     res = [{"dataset": "sf100", "query": "q23", "arm": "llm", "best_duration_ms": 120.0,

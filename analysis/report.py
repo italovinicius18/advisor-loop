@@ -41,7 +41,7 @@ def _sf_of(dataset: str) -> int:
     return int(str(dataset).lower().removeprefix("sf"))
 
 
-def harness_oracle_table(replay_journal: str) -> dict[tuple[int, str], float]:
+def harness_oracle_table(replay_journal: str | list[str]) -> dict[tuple[int, str], float]:
     """ORACULO-NO-HARNESS: a celula vencedora da matriz REEXECUTADA no nosso
     harness (campanha arm=fixed, ex. cluster-oracle-replay-sf100). Le as linhas
     opt_result do journal do replay -> {(sf, query): best_duration_ms}.
@@ -49,12 +49,21 @@ def harness_oracle_table(replay_journal: str) -> dict[tuple[int, str], float]:
     Por que: o replay de q03 (2c x 20w x 7g) deu 42s quente no harness vs 20.7s
     na matriz -- um offset fixo do harness (Spark 4.2 vs 3.5, pool de nos sem
     colocation com o MinIO, S3A) que NAO e erro do LLM. Regret contra
-    t*_harness compara maca com maca: mesmo engine, mesmos nos, mesmo protocolo."""
+    t*_harness compara maca com maca: mesmo engine, mesmos nos, mesmo protocolo.
+
+    Aceita varios journals (replay das top-k celulas da matriz, um por rank):
+    a regua vira o MIN por (sf, query) entre eles. So a vencedora da matriz nao
+    basta -- no sf100 as 3 melhores celulas ficam a 2-7% uma da outra, e no
+    harness a ordem pode trocar."""
+    journals = [replay_journal] if isinstance(replay_journal, str) else list(replay_journal)
     out: dict[tuple[int, str], float] = {}
-    for r in _load_opt_results(replay_journal):
-        best = r.get("best_duration_ms")
-        if best is not None:
-            out[(_sf_of(r["dataset"]), r["query"])] = float(best)
+    for journal in journals:
+        for r in _load_opt_results(journal):
+            best = r.get("best_duration_ms")
+            if best is None:
+                continue
+            key = (_sf_of(r["dataset"]), r["query"])
+            out[key] = min(out.get(key, float("inf")), float(best))
     return out
 
 
@@ -122,8 +131,8 @@ def main() -> int:
     ap.add_argument("journal", help="journal jsonl da campanha")
     ap.add_argument("matrix", help="parquet da matriz (oraculo)")
     ap.add_argument("--out", help="grava o report json aqui", default=None)
-    ap.add_argument("--harness-oracle", default=None,
-                    help="journal de um replay arm=fixed (celula vencedora no harness)")
+    ap.add_argument("--harness-oracle", default=None, nargs="+",
+                    help="journal(s) de replay arm=fixed (top-k celulas no harness; usa o min)")
     args = ap.parse_args()
     rep = build_report(_load_opt_results(args.journal), oracle_table(args.matrix),
                        oracle_table_median(args.matrix),

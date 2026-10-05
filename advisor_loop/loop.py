@@ -55,7 +55,8 @@ def _run_median(deps: Deps, ep: Episode, rec: Recommendation, tries: int,
 
 def optimize(episode: Episode, deps: Deps, advisor, max_iters: int = 4,
              patience: int = 2, tries: int = 1,
-             baseline_cfg: ConfigVector | None = None, envelope=None) -> dict:
+             baseline_cfg: ConfigVector | None = None, envelope=None,
+             run_baseline: bool = True) -> dict:
     """Laço fechado de otimização (spec §2.5): propose -> validate -> execute ->
     distill -> re-propose. Para em patience iterações sem melhora ou em max_iters.
 
@@ -82,8 +83,13 @@ def optimize(episode: Episode, deps: Deps, advisor, max_iters: int = 4,
     # recebem-no antes da primeira proposta.
     if envelope is not None and hasattr(advisor, "set_envelope"):
         advisor.set_envelope(envelope)
-    baseline_ms, _bdurs, baseline_metrics, _berr = _run_median(
-        deps, episode, Recommendation(config=base_cfg, rationale="baseline"), tries)
+    # run_baseline=False: replays da regua top-k nao precisam do default (no
+    # sf500 ele domina o custo); sem baseline -> teto do submitter.
+    if run_baseline:
+        baseline_ms, _bdurs, baseline_metrics, baseline_err = _run_median(
+            deps, episode, Recommendation(config=base_cfg, rationale="baseline"), tries)
+    else:
+        baseline_ms, baseline_metrics, baseline_err = None, {}, None
     # v4: teto de wall clock POR PROPOSTA relativo a baseline (3x, minimo 20 min):
     # uma proposta ruim custa minutos, nao as 3h do teto absoluto; "timeout"
     # continua sendo um dado. Sem baseline (falhou) -> teto do submitter.
@@ -164,6 +170,9 @@ def optimize(episode: Episode, deps: Deps, advisor, max_iters: int = 4,
             "best_duration_ms": best_dur,
             "baseline_ms": baseline_ms,
             "baseline_metrics": baseline_metrics,
+            # por que o baseline falhou (timeout/oom/erro); antes era descartado
+            # e o sf500 q23 v4 ficou sem diagnostico.
+            "baseline_error": baseline_err,
             "baseline_config": base_cfg.model_dump(),
             "iterations": iterations,
             "history_len": len(history)}

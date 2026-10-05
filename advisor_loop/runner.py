@@ -141,7 +141,10 @@ def _run_optimize_campaign(camp: dict, deps: Deps, adv: Advisor) -> dict:
             # v4: envelope de escala por (dataset, query) -> baseline dimensionada
             # (a menos que a campanha fixe baseline_config), pisos no Guardian e
             # amostragem/ancoras dentro do envelope. Sem sizer -> comportamento v3.
-            env = deps.sizer(ep) if getattr(deps, "sizer", None) else None
+            # arm fixed (replay do oraculo) NAO passa pelo envelope: a regua mede
+            # a celula da matriz como ela e (o piso >=8g/executor rejeitaria
+            # 2c x 16w x 7g, rank 3 do sf100 q03).
+            env = (deps.sizer(ep) if getattr(deps, "sizer", None) and arm != "fixed" else None)
             baseline_cfg = explicit_baseline
             if baseline_cfg is None and env is not None:
                 baseline_cfg = env.baseline(pinned, deps.guardian.cluster)
@@ -152,7 +155,8 @@ def _run_optimize_campaign(camp: dict, deps: Deps, adv: Advisor) -> dict:
                                      "baseline": baseline_cfg.model_dump()})
             result = optimize(ep, deps, advisor, max_iters=camp.get("max_iters", 4),
                               patience=camp.get("patience", 2), tries=tries,
-                              baseline_cfg=baseline_cfg, envelope=env)
+                              baseline_cfg=baseline_cfg, envelope=env,
+                              run_baseline=camp.get("baseline", True))
             deps.journal.append({"kind": "opt_result", "task_key": ek, "arm": arm,
                                  "query": query, "dataset": dataset,
                                  "provider": ep.provider, "level": ep.level,

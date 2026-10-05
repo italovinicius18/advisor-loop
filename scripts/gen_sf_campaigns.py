@@ -65,17 +65,19 @@ def pinned_for(sf: int) -> dict:
     return PINNED_BIG if sf >= BIG_SF else PINNED
 
 
-def oracle_cells(matrix: str, sf: int) -> dict[str, dict]:
+def oracle_cells(matrix: str, sf: int, rank: int = 1) -> dict[str, dict]:
+    """rank=1 = celula vencedora (t*); rank=k = k-esima CELULA distinta,
+    ordenada pelo melhor try (mesma regua do t*)."""
     con = duckdb.connect()
     out = {}
     pinned = pinned_for(sf)
     for q in QUERIES:
         row = con.execute(
-            """SELECT executor_cores, CAST(executor_memory_gb AS INT), workers, duration_ms
+            """SELECT executor_cores, CAST(executor_memory_gb AS INT), workers, min(duration_ms) AS d
                FROM read_parquet(?) WHERE status='success' AND CAST(scale_factor AS INT)=? AND query=?
-               ORDER BY duration_ms LIMIT 1""", [matrix, sf, q]).fetchone()
+               GROUP BY 1, 2, 3 ORDER BY d LIMIT 1 OFFSET ?""", [matrix, sf, q, rank - 1]).fetchone()
         if row is None:
-            raise SystemExit(f"sem celula success para sf{sf} {q}")
+            raise SystemExit(f"sem celula success rank {rank} para sf{sf} {q}")
         c, m, w, d = row
         out[q] = dict(executor_cores=int(c), executor_memory_gb=int(m), executor_instances=int(w),
                       t_star_s=round(d / 1000, 1), **pinned)
@@ -103,12 +105,18 @@ def main():
     ap.add_argument("--image", required=True, help="tag do advisor-controller (ex.: sf100-r14)")
     ap.add_argument("--matrix", default=str(ROOT / "data/matrix/training_data.parquet"))
     ap.add_argument("--tries", type=int, default=3)
+    ap.add_argument("--rank", type=int, default=1,
+                    help="k>1 gera SO o replay da k-esima celula (sf<N>-replay-r<k>), p/ a regua top-k")
     a = ap.parse_args()
     queue = []
     for sf in a.sfs:
         ds = f"sf{sf}"
         big = sf >= BIG_SF
-        cells = oracle_cells(a.matrix, sf)
+        cells = oracle_cells(a.matrix, sf, a.rank)
+        replay = f"{ds}-replay" if a.rank == 1 else f"{ds}-replay-r{a.rank}"
+        # ranks extras so alimentam a regua: sem baseline default (no sf500 ele
+        # domina o custo do replay).
+        nobase = "baseline: false\n" if a.rank > 1 else ""
         cfgs = "\n".join(f"  {q}: {yaml_cfg(c)}   # t*={c['t_star_s']}s" for q, c in cells.items())
         extra = ""
         if big:
@@ -117,9 +125,9 @@ def main():
             extra = (f"# SF>={BIG_SF}: knobs pinados = os da matriz neste SF (patch v2) e baseline =\n"
                      f"# menor celula 'large' (12c x 2w x 48g); o default Spark nao roda aqui.\n"
                      f"pinned: {{{pin}}}\nbaseline_config: {yaml_cfg(BASELINE_BIG)}\n")
-        write(ROOT / f"campaigns/{ds}-replay.yaml", f"""# Replay do oraculo em {ds}: celula vencedora da matriz por query, no harness
-# quente (regua t*_harness deste SF). Gerado por scripts/gen_sf_campaigns.py.
-name: {ds}-replay
+        write(ROOT / f"campaigns/{replay}.yaml", f"""# Replay do oraculo em {ds}: celula rank {a.rank} da matriz por query, no harness
+# quente (regua t*_harness deste SF = min dos ranks). Gerado por scripts/gen_sf_campaigns.py.
+name: {replay}
 mode: optimize
 backend: spark_k8s
 arm: fixed
@@ -130,9 +138,15 @@ queries: [{', '.join(QUERIES)}]
 tries: {a.tries}
 max_iters: 1
 patience: 1
-{extra}configs:
+{nobase}{extra}configs:
 {cfgs}
 """)
+        if a.rank > 1:
+            write(ROOT / f"kubernetes/campaign-pods/advisor-controller-{replay}.yaml",
+                  POD.format(title=f"{replay} (regua top-k; gerado por scripts/gen_sf_campaigns.py)",
+                             name=replay, camp=replay, image=a.image))
+            queue.append(replay)
+            continue
         write(ROOT / f"campaigns/{ds}-hybrid3.yaml", f"""# Hibrido v3.1 (consolidacao, knobs pinados) em {ds}. Gerado por scripts/gen_sf_campaigns.py.
 name: {ds}-hybrid3
 mode: optimize

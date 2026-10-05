@@ -45,6 +45,31 @@ def _deps(backend):
                 backend=backend, memory=_M(), probe_factory=lambda ep: None)
 
 
+def test_fixed_replay_ignores_envelope_and_can_skip_baseline():
+    # Regua top-k: o replay mede a celula da MATRIZ como ela e. O envelope v4
+    # (piso >=8g/executor) rejeitaria 2c x 16w x 7g; e o baseline default
+    # nao serve a regua e domina o custo no sf500.
+    be = _BE()
+    deps = _deps(be)
+
+    def _sizer(ep):
+        raise AssertionError("arm fixed nao deve consultar o envelope")
+    deps.sizer = _sizer
+    cell = {"executor_cores": 2, "executor_memory_gb": 7, "executor_instances": 16,
+            "driver_memory_gb": 8, "shuffle_partitions": 200, "advisory_partition_mb": 64,
+            "aqe_enabled": True, "broadcast_threshold_mb": 10}
+    camp = {"name": "t", "mode": "optimize", "arm": "fixed", "datasets": ["sf100"],
+            "queries": ["q23"], "level": "L0", "provider": "oracle-replay",
+            "max_iters": 1, "patience": 1, "tries": 3, "baseline": False,
+            "configs": {"q23": cell}}
+    _run_optimize_campaign(camp, deps, None)
+    opt = [r for r in deps.journal.rows if r.get("kind") == "opt_result"][0]
+    assert opt["baseline_ms"] is None and opt["baseline_error"] is None
+    assert opt["best_duration_ms"] == 100.0
+    assert opt["iterations"][0]["config"]["executor_memory_gb"] == 7
+    assert be.calls == 3                       # so a celula, sem baseline
+
+
 def test_random_arm_drives_loop():
     be = _BE()
     deps = _deps(be)
