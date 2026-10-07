@@ -12,6 +12,12 @@ from pathlib import Path
 import duckdb
 
 QUERIES = ["q03", "q23", "q50"]
+# TPC-H (exp06): uma query por choke point (Boncz et al., TPCTC 2013) --
+# q01 agregacao/scan (leve), q09 multi-join (pesada), q18 group-by grande
+# com subquery (pesada). Dataset "tpch-sf<N>" (advisor_loop/benchmarks.py).
+BENCH = {"tpcds": dict(queries=QUERIES, prefix="", matrix="data/matrix/training_data.parquet"),
+         "tpch": dict(queries=["q01", "q09", "q18"], prefix="tpch-",
+                      matrix="data/matrix/tpch_training_data.parquet")}
 PINNED = dict(driver_memory_gb=8, shuffle_partitions=200, advisory_partition_mb=64,
               aqe_enabled=True, broadcast_threshold_mb=10)
 # SF>=750: a matriz so rodou a grade 'large' (12c x 48g x W2/W4/W6) e SO com o
@@ -65,13 +71,13 @@ def pinned_for(sf: int) -> dict:
     return PINNED_BIG if sf >= BIG_SF else PINNED
 
 
-def oracle_cells(matrix: str, sf: int, rank: int = 1) -> dict[str, dict]:
+def oracle_cells(matrix: str, sf: int, rank: int = 1, queries=None) -> dict[str, dict]:
     """rank=1 = celula vencedora (t*); rank=k = k-esima CELULA distinta,
     ordenada pelo melhor try (mesma regua do t*)."""
     con = duckdb.connect()
     out = {}
     pinned = pinned_for(sf)
-    for q in QUERIES:
+    for q in (queries or QUERIES):
         row = con.execute(
             """SELECT executor_cores, CAST(executor_memory_gb AS INT), workers, min(duration_ms) AS d
                FROM read_parquet(?) WHERE status='success' AND CAST(scale_factor AS INT)=? AND query=?
@@ -103,20 +109,26 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sfs", nargs="+", type=int, required=True)
     ap.add_argument("--image", required=True, help="tag do advisor-controller (ex.: sf100-r14)")
-    ap.add_argument("--matrix", default=str(ROOT / "data/matrix/training_data.parquet"))
+    ap.add_argument("--benchmark", choices=sorted(BENCH), default="tpcds")
+    ap.add_argument("--matrix", default=None, help="default: matriz do benchmark")
     ap.add_argument("--tries", type=int, default=3)
     ap.add_argument("--rank", type=int, default=1,
                     help="k>1 gera SO o replay da k-esima celula (sf<N>-replay-r<k>), p/ a regua top-k")
     a = ap.parse_args()
+    bench = BENCH[a.benchmark]
+    qs = bench["queries"]
+    matrix = a.matrix or str(ROOT / bench["matrix"])
     queue = []
     for sf in a.sfs:
-        ds = f"sf{sf}"
+        ds = f"{bench['prefix']}sf{sf}"
         big = sf >= BIG_SF
-        cells = oracle_cells(a.matrix, sf, a.rank)
+        cells = oracle_cells(matrix, sf, a.rank, qs)
         replay = f"{ds}-replay" if a.rank == 1 else f"{ds}-replay-r{a.rank}"
         # ranks extras so alimentam a regua: sem baseline default (no sf500 ele
         # domina o custo do replay).
-        nobase = "baseline: false\n" if a.rank > 1 else ""
+        # No TPC-H nem o rank 1 precisa: o replay fica fora do envelope, entao o
+        # baseline seria o default (8c x 1w x 8g) -- horas em q09/q18 no sf500.
+        nobase = "baseline: false\n" if (a.rank > 1 or a.benchmark != "tpcds") else ""
         cfgs = "\n".join(f"  {q}: {yaml_cfg(c)}   # t*={c['t_star_s']}s" for q, c in cells.items())
         extra = ""
         if big:
@@ -134,7 +146,7 @@ arm: fixed
 level: L0
 provider: oracle-replay
 datasets: [{ds}]
-queries: [{', '.join(QUERIES)}]
+queries: [{', '.join(qs)}]
 tries: {a.tries}
 max_iters: 1
 patience: 1
@@ -147,7 +159,8 @@ patience: 1
                              name=replay, camp=replay, image=a.image))
             queue.append(replay)
             continue
-        write(ROOT / f"campaigns/{ds}-hybrid3.yaml", f"""# Hibrido v3.1 (consolidacao, knobs pinados) em {ds}. Gerado por scripts/gen_sf_campaigns.py.
+        if a.benchmark == "tpcds":
+            write(ROOT / f"campaigns/{ds}-hybrid3.yaml", f"""# Hibrido v3.1 (consolidacao, knobs pinados) em {ds}. Gerado por scripts/gen_sf_campaigns.py.
 name: {ds}-hybrid3
 mode: optimize
 backend: spark_k8s
@@ -157,15 +170,33 @@ knobs: matrix3
 level: L0
 provider: anthropic/claude-sonnet-5
 datasets: [{ds}]
-queries: [{', '.join(QUERIES)}]
+queries: [{', '.join(qs)}]
 tries: {a.tries}
 max_iters: 8
 patience: 3
 {extra}""")
-        if big:
-            arms = ("replay", "hybrid3")
+            hybrids = ("hybrid3",)
         else:
-            arms = ("replay", "hybrid3", "random")
+            hybrids = ("a2-haiku", "a0-heuristic")
+            for arm, anchor, prov in (("a2-haiku", "llm", "anthropic/claude-haiku-4.5"),
+                                      ("a0-heuristic", "heuristic", "none-heuristic")):
+                write(ROOT / f"campaigns/{ds}-{arm}.yaml", f"""# Hibrido v4.1 (envelope de escala), ancora {anchor}, em {ds}. Gerado por scripts/gen_sf_campaigns.py.
+name: {ds}-{arm}
+mode: optimize
+backend: spark_k8s
+arm: hybrid
+llm_every: 3
+knobs: matrix3
+level: L0
+anchor: {anchor}
+provider: {prov}
+datasets: [{ds}]
+queries: [{', '.join(qs)}]
+tries: {a.tries}
+max_iters: 8
+patience: 3
+{extra}""")
+        arms = ("replay", *hybrids) + (() if big else ("random",))
         if big:
             print(f"{ds}: sem braco random (SF>={BIG_SF})")
         if not big:
@@ -178,7 +209,7 @@ seed: 1
 level: L0
 provider: random-free-8
 datasets: [{ds}]
-queries: [{', '.join(QUERIES)}]
+queries: [{', '.join(qs)}]
 tries: {a.tries}
 max_iters: 8
 patience: 3

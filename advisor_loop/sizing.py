@@ -197,7 +197,12 @@ class Sizer:
         env = None
         try:
             tables = self.tables_by_dataset[ep.dataset]
-            sql = (self.queries_dir / f"{ep.queries[0]}.sql").read_text()
+            # queries_dir = dir TPC-DS; outros benchmarks ficam ao lado
+            # (queries-tpch/), escolhidos pelo nome do dataset.
+            from advisor_loop.benchmarks import queries_subdir
+            sub = queries_subdir(ep.dataset)
+            qdir = self.queries_dir if sub == "queries" else self.queries_dir.parent / sub
+            sql = (qdir / f"{ep.queries[0]}.sql").read_text()
             gb, per = query_data_gb(self.s3, tables, sql)
             env = make_envelope(gb, per)
         except Exception as e:  # noqa: BLE001 -- degradacao graciosa p/ v3

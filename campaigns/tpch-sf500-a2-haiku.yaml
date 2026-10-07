@@ -1,0 +1,15 @@
+# Hibrido v4.1 (envelope de escala), ancora llm, em tpch-sf500. Gerado por scripts/gen_sf_campaigns.py.
+name: tpch-sf500-a2-haiku
+mode: optimize
+backend: spark_k8s
+arm: hybrid
+llm_every: 3
+knobs: matrix3
+level: L0
+anchor: llm
+provider: anthropic/claude-haiku-4.5
+datasets: [tpch-sf500]
+queries: [q01, q09, q18]
+tries: 3
+max_iters: 8
+patience: 3

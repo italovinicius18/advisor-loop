@@ -193,11 +193,33 @@ sf1000:
   web_returns: s3://silver/sf1000/delta/parquet/web_returns
   web_sales: s3://silver/sf1000/delta/parquet/web_sales
   web_site: s3://silver/sf1000/delta/parquet/web_site
+# TPC-H (exp06): mesmo SF, Silver em silver/sf<N>/tpch/delta/parquet; o nome
+# 'tpch-sf<N>' seleciona tabelas e queries-tpch/ (advisor_loop/benchmarks.py).
+# So sf500/sf750 tem Silver TPC-H no MinIO (sf100/250 foram removidos da Silver).
+tpch-sf500:
+  customer: s3://silver/sf500/tpch/delta/parquet/customer
+  lineitem: s3://silver/sf500/tpch/delta/parquet/lineitem
+  nation: s3://silver/sf500/tpch/delta/parquet/nation
+  orders: s3://silver/sf500/tpch/delta/parquet/orders
+  part: s3://silver/sf500/tpch/delta/parquet/part
+  partsupp: s3://silver/sf500/tpch/delta/parquet/partsupp
+  region: s3://silver/sf500/tpch/delta/parquet/region
+  supplier: s3://silver/sf500/tpch/delta/parquet/supplier
+tpch-sf750:
+  customer: s3://silver/sf750/tpch/delta/parquet/customer
+  lineitem: s3://silver/sf750/tpch/delta/parquet/lineitem
+  nation: s3://silver/sf750/tpch/delta/parquet/nation
+  orders: s3://silver/sf750/tpch/delta/parquet/orders
+  part: s3://silver/sf750/tpch/delta/parquet/part
+  partsupp: s3://silver/sf750/tpch/delta/parquet/partsupp
+  region: s3://silver/sf750/tpch/delta/parquet/region
+  supplier: s3://silver/sf750/tpch/delta/parquet/supplier
 spark:
   ssh_cmd: [bash, -c]        # exec local no pod (sem SSH); kubectl usa a SA in-cluster
   # r10: tries em sessao + warm-up (harness quente); r9: driver coleta cpu/run time, tasks/stages, skew e resumo do plano fisico
   # (sinais de utilizacao + perfil da query na iteracao 0).
-  image: ghcr.io/italovinicius18/spark-advisor:4.2.0-delta-r11
+  # r12: driver resolve 'tpch-sf<N>' (Silver tpch/ + queries-tpch/), TPC-DS inalterado.
+  image: ghcr.io/italovinicius18/spark-advisor:4.2.0-delta-r12
   # Multi-no via nodeAffinity (nao node_selector de no unico): fixar ids-pb (24c)
   # starvava executores e impedia o otimo de q23/q50 (72c/288Gi, exige >= 2 nos)
   # -> regret confundido com o cap do no. O SA namespace-scoped nao pode rotular

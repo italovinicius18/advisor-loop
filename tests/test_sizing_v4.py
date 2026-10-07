@@ -162,6 +162,18 @@ def test_loop_uses_envelope_for_context_validation_and_relative_timeout():
     assert be.calls[1][1] == pytest.approx(1800.0)
 
 
+def test_sizer_reads_tpch_sql_from_its_own_dir(tmp_path):
+    # tpch-sf500 q09 nao pode ler queries/q09.sql (TPC-DS): le queries-tpch/
+    (tmp_path / "queries").mkdir()
+    (tmp_path / "queries-tpch").mkdir()
+    (tmp_path / "queries" / "q09.sql").write_text("select 1 from store_sales")
+    (tmp_path / "queries-tpch" / "q09.sql").write_text("select 1 from lineitem")
+    s3 = FakeS3({"b/h/lineitem/_delta_log/00000000000000000000.json": _commit({"a": 5 * 1024 ** 3})})
+    sz = Sizer(s3, {"tpch-sf500": {"lineitem": "s3://b/h/lineitem"}}, tmp_path / "queries")
+    env = sz(Episode(workload="w", dataset="tpch-sf500", queries=["q09"], provider="m"))
+    assert isinstance(env, Envelope) and env.data_gb == 5.0
+
+
 def test_sizer_caches_and_degrades_gracefully(tmp_path):
     (tmp_path / "q03.sql").write_text("select 1 from t")
     s3 = FakeS3({"b/p/t/_delta_log/00000000000000000000.json": _commit({"a": 3 * 1024 ** 3})})

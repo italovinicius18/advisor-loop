@@ -234,6 +234,29 @@ def _write_result(result: dict):
             print("ADVISOR_RESULT_WRITE_ERROR " + str(e), flush=True)
 
 
+TPCDS_TABLES = [
+    "call_center", "catalog_page", "catalog_returns", "catalog_sales",
+    "customer", "customer_address", "customer_demographics", "date_dim",
+    "household_demographics", "income_band", "inventory", "item",
+    "promotion", "reason", "ship_mode", "store", "store_returns",
+    "store_sales", "time_dim", "warehouse", "web_page", "web_returns",
+    "web_sales", "web_site",
+]
+TPCH_TABLES = ["customer", "lineitem", "nation", "orders", "part",
+               "partsupp", "region", "supplier"]
+
+
+def resolve_dataset(dataset: str) -> dict:
+    """'sf500' (TPC-DS legado) | 'tpch-sf500' -> path Silver, tabelas e dir de
+    queries. Espelha advisor_loop.benchmarks (este arquivo roda solto na imagem)."""
+    if dataset.startswith("tpch-"):
+        sf = dataset.removeprefix("tpch-")
+        return {"silver": f"s3a://silver/{sf}/tpch/delta/parquet", "tables": TPCH_TABLES,
+                "queries_dir": "/opt/advisor/queries-tpch"}
+    return {"silver": f"s3a://silver/{dataset}/delta/parquet", "tables": TPCDS_TABLES,
+            "queries_dir": "/opt/advisor/queries"}
+
+
 def main():   # coberto pela validação ao vivo, não por unit test
     from pyspark.sql import SparkSession
     sf = os.environ["SF"]
@@ -243,20 +266,13 @@ def main():   # coberto pela validação ao vivo, não por unit test
     metrics = zero_metrics()
     task_durs: list = []
     _register_metrics_listener(spark, metrics, task_durs)
-    # todas as tabelas TPC-DS (registrar as que existirem na Silver evita
+    # todas as tabelas do benchmark (registrar as que existirem na Silver evita
     # a fragilidade de extrair nomes do SQL — joins por virgula/alias)
-    TPCDS_TABLES = [
-        "call_center", "catalog_page", "catalog_returns", "catalog_sales",
-        "customer", "customer_address", "customer_demographics", "date_dim",
-        "household_demographics", "income_band", "inventory", "item",
-        "promotion", "reason", "ship_mode", "store", "store_returns",
-        "store_sales", "time_dim", "warehouse", "web_page", "web_returns",
-        "web_sales", "web_site",
-    ]
+    ds = resolve_dataset(sf)
     try:
-        base = f"s3a://silver/{sf}/delta/parquet"
+        base = ds["silver"]
         loaded = []
-        for name in TPCDS_TABLES:
+        for name in ds["tables"]:
             try:
                 spark.read.format("delta").load(f"{base}/{name}").createOrReplaceTempView(name)
                 loaded.append(name)
@@ -264,8 +280,8 @@ def main():   # coberto pela validação ao vivo, não por unit test
                 # nao silenciar: registrar a causa real (antes um `except: pass`
                 # mascarava falhas de s3a/delta e a query estourava com TABLE_NOT_FOUND)
                 print(f"ADVISOR_LOAD_ERROR {name}: {str(le)[:300]}", flush=True)
-        print(f"ADVISOR_LOADED {len(loaded)}/{len(TPCDS_TABLES)}: {loaded}", flush=True)
-        sql = open(f"/opt/advisor/queries/{query}.sql").read().strip().rstrip(";").strip()
+        print(f"ADVISOR_LOADED {len(loaded)}/{len(ds['tables'])}: {loaded}", flush=True)
+        sql = open(f"{ds['queries_dir']}/{query}.sql").read().strip().rstrip(";").strip()
         df = spark.sql(sql)
         # Protocolo QUENTE (igual ao da matriz offline): espera os executores
         # registrarem, roda WARMUP execucoes nao cronometradas (a 1a e reportada

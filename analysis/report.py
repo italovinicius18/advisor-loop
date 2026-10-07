@@ -38,7 +38,8 @@ def anytime(iterations: list[dict]) -> list[float]:
 
 def _sf_of(dataset: str) -> int:
     """'sf100' -> 100."""
-    return int(str(dataset).lower().removeprefix("sf"))
+    from advisor_loop.benchmarks import sf_of
+    return sf_of(dataset)
 
 
 def harness_oracle_table(replay_journal: str | list[str]) -> dict[tuple[int, str], float]:

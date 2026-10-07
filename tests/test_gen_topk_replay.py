@@ -26,6 +26,28 @@ def test_rank1_reproduces_existing_replay_campaign():
         assert _shape(cells[q]) == _shape(c)
 
 
+def test_tpch_campaigns_use_tpch_dataset_queries_and_matrix(tmp_path, monkeypatch):
+    gen = _gen()
+    monkeypatch.setattr(gen, "ROOT", tmp_path)
+    monkeypatch.setattr("sys.argv", ["gen", "--benchmark", "tpch", "--sfs", "500", "750",
+                                     "--image", "img-x", "--matrix",
+                                     str(ROOT / "data/matrix/tpch_training_data.parquet")])
+    gen.main()
+    rep = yaml.safe_load(open(tmp_path / "campaigns/tpch-sf500-replay.yaml"))
+    assert rep["datasets"] == ["tpch-sf500"] and rep["queries"] == ["q01", "q09", "q18"]
+    assert _shape(rep["configs"]["q09"]) == (12, 48, 6)            # vencedora exp06 sf500 q09
+    a2 = yaml.safe_load(open(tmp_path / "campaigns/tpch-sf500-a2-haiku.yaml"))
+    assert a2["arm"] == "hybrid" and a2["anchor"] == "llm" and "haiku" in a2["provider"]
+    a0 = yaml.safe_load(open(tmp_path / "campaigns/tpch-sf500-a0-heuristic.yaml"))
+    assert a0["anchor"] == "heuristic"
+    assert (tmp_path / "campaigns/tpch-sf500-random.yaml").exists()
+    big = yaml.safe_load(open(tmp_path / "campaigns/tpch-sf750-a2-haiku.yaml"))
+    assert big["pinned"]["shuffle_partitions"] == 2000 and big["baseline_config"]["executor_instances"] == 2
+    assert not (tmp_path / "campaigns/tpch-sf750-random.yaml").exists()   # sem random em SF>=750
+    pod = (tmp_path / "kubernetes/campaign-pods/advisor-controller-tpch-sf500-a0-heuristic.yaml").read_text()
+    assert "img-x" in pod and "campaigns/tpch-sf500-a0-heuristic.yaml" in pod
+
+
 def test_rank2_and_rank3_are_distinct_cells_in_order():
     gen = _gen()
     r1, r2, r3 = (gen.oracle_cells(MATRIX, 500, rank=k) for k in (1, 2, 3))
