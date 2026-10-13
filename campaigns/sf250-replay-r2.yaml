@@ -1,0 +1,18 @@
+# Replay do oraculo em sf250: celula rank 2 da matriz por query, no harness
+# quente (regua t*_harness deste SF = min dos ranks). Gerado por scripts/gen_sf_campaigns.py.
+name: sf250-replay-r2
+mode: optimize
+backend: spark_k8s
+arm: fixed
+level: L0
+provider: oracle-replay
+datasets: [sf250]
+queries: [q03, q23, q50]
+tries: 3
+max_iters: 1
+patience: 1
+baseline: false
+configs:
+  q03: {executor_cores: 4, executor_memory_gb: 14, executor_instances: 10, driver_memory_gb: 8, shuffle_partitions: 200, advisory_partition_mb: 64, aqe_enabled: true, broadcast_threshold_mb: 10}   # t*=38.2s
+  q23: {executor_cores: 12, executor_memory_gb: 48, executor_instances: 4, driver_memory_gb: 8, shuffle_partitions: 200, advisory_partition_mb: 64, aqe_enabled: true, broadcast_threshold_mb: 10}   # t*=339.2s
+  q50: {executor_cores: 12, executor_memory_gb: 48, executor_instances: 4, driver_memory_gb: 8, shuffle_partitions: 200, advisory_partition_mb: 64, aqe_enabled: true, broadcast_threshold_mb: 10}   # t*=137.8s
