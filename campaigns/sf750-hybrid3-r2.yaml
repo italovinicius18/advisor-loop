@@ -1,0 +1,22 @@
+# Hibrido v3.1 (consolidacao, knobs pinados) em sf750. Gerado por scripts/gen_sf_campaigns.py.
+# Repeticao r2 (2026-10-15) da campanha de setembro, mesmo advisor v3.1:
+# envelope desligado. Diferenca declarada: o codigo atual ja nao repete uma
+# forma de executor que falhou com memoria >= (correcao v4.1).
+name: sf750-hybrid3-r2
+mode: optimize
+backend: spark_k8s
+arm: hybrid
+llm_every: 3
+knobs: matrix3
+level: L0
+provider: anthropic/claude-sonnet-5
+datasets: [sf750]
+queries: [q03, q23, q50]
+tries: 3
+max_iters: 8
+patience: 3
+envelope: false
+# SF>=750: knobs pinados = os da matriz neste SF (patch v2) e baseline =
+# menor celula 'large' (12c x 2w x 48g); o default Spark nao roda aqui.
+pinned: {driver_memory_gb: 16, shuffle_partitions: 2000, advisory_partition_mb: 64, aqe_enabled: true, broadcast_threshold_mb: 10}
+baseline_config: {executor_cores: 12, executor_memory_gb: 48, executor_instances: 2, driver_memory_gb: 16, shuffle_partitions: 2000, advisory_partition_mb: 64, aqe_enabled: true, broadcast_threshold_mb: 10}

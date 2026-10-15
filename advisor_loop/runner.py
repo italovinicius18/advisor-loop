@@ -144,7 +144,10 @@ def _run_optimize_campaign(camp: dict, deps: Deps, adv: Advisor) -> dict:
             # arm fixed (replay do oraculo) NAO passa pelo envelope: a regua mede
             # a celula da matriz como ela e (o piso >=8g/executor rejeitaria
             # 2c x 16w x 7g, rank 3 do sf100 q03).
-            env = (deps.sizer(ep) if getattr(deps, "sizer", None) and arm != "fixed" else None)
+            # `envelope: false` na campanha reproduz uma campanha v3.1 (sem
+            # envelope) com o codigo atual -- repeticoes do sf750/sf1000 hybrid3.
+            use_env = arm != "fixed" and camp.get("envelope", True)
+            env = (deps.sizer(ep) if getattr(deps, "sizer", None) and use_env else None)
             baseline_cfg = explicit_baseline
             if baseline_cfg is None and env is not None:
                 baseline_cfg = env.baseline(pinned, deps.guardian.cluster)

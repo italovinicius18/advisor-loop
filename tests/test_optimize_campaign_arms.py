@@ -70,6 +70,23 @@ def test_fixed_replay_ignores_envelope_and_can_skip_baseline():
     assert be.calls == 3                       # so a celula, sem baseline
 
 
+def test_campaign_can_disable_envelope():
+    # Repeticao de uma campanha v3.1 (sem envelope) com o codigo atual: a
+    # campanha desliga o envelope explicitamente, senao o advisor nao e o mesmo.
+    be = _BE()
+    deps = _deps(be)
+
+    def _sizer(ep):
+        raise AssertionError("envelope: false nao deve consultar o sizer")
+    deps.sizer = _sizer
+    camp = {"name": "t", "mode": "optimize", "arm": "random", "datasets": ["sf750"],
+            "queries": ["q23"], "level": "L0", "provider": "m",
+            "max_iters": 2, "patience": 2, "tries": 1, "envelope": False}
+    out = _run_optimize_campaign(camp, deps, None)
+    assert out["episodes_run"] == 1
+    assert not [r for r in deps.journal.rows if r.get("kind") == "envelope"]
+
+
 def test_random_arm_drives_loop():
     be = _BE()
     deps = _deps(be)
