@@ -1,0 +1,56 @@
+{
+  "A0-fixed": {
+    "n_workloads": 693,
+    "feasibility_hit_rate": 0.9985569985569985,
+    "regret_mean": 0.20832900953882644,
+    "regret_median": 0.166213073223884,
+    "regret_p90": 0.44650861597111896,
+    "cost_usd": 0.0,
+    "n_llm_calls": 0
+  },
+  "A1-random": {
+    "n_workloads": 693,
+    "feasibility_hit_rate": 0.9985569985569985,
+    "regret_mean": 0.0828813316532904,
+    "regret_median": 0.0013932678545152122,
+    "regret_p90": 0.2600246247354967,
+    "cost_usd": 0.0,
+    "n_llm_calls": 0
+  },
+  "A2-surrogate": {
+    "n_workloads": 693,
+    "feasibility_hit_rate": 0.5714285714285714,
+    "regret_mean": 0.32104101939583624,
+    "regret_median": 0.16585565751484743,
+    "regret_p90": 0.7916075597273242,
+    "cost_usd": 0.0,
+    "n_llm_calls": 0
+  },
+  "A3m-llm-online+telemetry": {
+    "n_workloads": 693,
+    "feasibility_hit_rate": 0.9942279942279942,
+    "regret_mean": 0.20277770783981525,
+    "regret_median": 0.1361254636037672,
+    "regret_p90": 0.47702965544905584,
+    "cost_usd": 0.59705696804,
+    "n_llm_calls": 2774
+  },
+  "A3t-llm-online-timeonly": {
+    "n_workloads": 693,
+    "feasibility_hit_rate": 0.9927849927849928,
+    "regret_mean": 0.15463952108590617,
+    "regret_median": 0.09791770555442236,
+    "regret_p90": 0.3746651497476425,
+    "cost_usd": 0.5562365395000002,
+    "n_llm_calls": 2771
+  },
+  "A4-llm-zeroshot": {
+    "n_workloads": 693,
+    "feasibility_hit_rate": 0.6911976911976911,
+    "regret_mean": 0.3179772498957662,
+    "regret_median": 0.20272128305591108,
+    "regret_p90": 0.6828073811530644,
+    "cost_usd": 0.12351586179999996,
+    "n_llm_calls": 693
+  }
+}
