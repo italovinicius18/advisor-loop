@@ -1,0 +1,15 @@
+# Hibrido v4.1, ancora llm, queries representativas em sf500. Gerado por scripts/gen_rep_campaigns.py.
+name: sf500-rep-a2-haiku
+mode: optimize
+backend: spark_k8s
+arm: hybrid
+llm_every: 3
+knobs: matrix3
+level: L0
+anchor: llm
+provider: anthropic/claude-haiku-4.5
+datasets: [sf500]
+queries: [q19, q71, q94, q66, q05, q02]
+tries: 3
+max_iters: 8
+patience: 3

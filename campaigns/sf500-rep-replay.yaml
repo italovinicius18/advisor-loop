@@ -1,0 +1,20 @@
+# Regua (queries representativas): celula rank 1 da matriz em sf500. Gerado por scripts/gen_rep_campaigns.py.
+name: sf500-rep-replay
+mode: optimize
+backend: spark_k8s
+arm: fixed
+level: L0
+provider: oracle-replay
+datasets: [sf500]
+queries: [q19, q71, q94, q66, q05, q02]
+tries: 3
+max_iters: 1
+patience: 1
+baseline: false
+configs:
+  q19: {executor_cores: 4, executor_memory_gb: 14, executor_instances: 12, driver_memory_gb: 8, shuffle_partitions: 200, advisory_partition_mb: 64, aqe_enabled: true, broadcast_threshold_mb: 10}   # t*=84.3s
+  q71: {executor_cores: 4, executor_memory_gb: 14, executor_instances: 12, driver_memory_gb: 8, shuffle_partitions: 200, advisory_partition_mb: 64, aqe_enabled: true, broadcast_threshold_mb: 10}   # t*=64.5s
+  q94: {executor_cores: 12, executor_memory_gb: 48, executor_instances: 6, driver_memory_gb: 8, shuffle_partitions: 200, advisory_partition_mb: 64, aqe_enabled: true, broadcast_threshold_mb: 10}   # t*=29.2s
+  q66: {executor_cores: 4, executor_memory_gb: 14, executor_instances: 12, driver_memory_gb: 8, shuffle_partitions: 200, advisory_partition_mb: 64, aqe_enabled: true, broadcast_threshold_mb: 10}   # t*=33.9s
+  q05: {executor_cores: 4, executor_memory_gb: 14, executor_instances: 12, driver_memory_gb: 8, shuffle_partitions: 200, advisory_partition_mb: 64, aqe_enabled: true, broadcast_threshold_mb: 10}   # t*=89.0s
+  q02: {executor_cores: 4, executor_memory_gb: 14, executor_instances: 12, driver_memory_gb: 8, shuffle_partitions: 200, advisory_partition_mb: 64, aqe_enabled: true, broadcast_threshold_mb: 10}   # t*=40.8s

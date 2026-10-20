@@ -72,6 +72,8 @@ def main(argv=None) -> int:
     ap.add_argument("--limit", type=int, default=0, help="nº de workloads (0=todos)")
     ap.add_argument("--max-iters", type=int, default=4)
     ap.add_argument("--out")
+    ap.add_argument("--benchmark", default="TPC-H", help="nome no prompt (TPC-H | TPC-DS)")
+    ap.add_argument("--shard", default="", help="i/n: processa so os workloads com indice %% n == i")
     args = ap.parse_args(argv)
 
     # timeout curto por request: um call que estagna falha rápido e é
@@ -83,8 +85,11 @@ def main(argv=None) -> int:
     wls = workloads(args.reference)
     if args.limit:
         wls = wls[:args.limit]
+    if args.shard:
+        i, n = (int(x) for x in args.shard.split("/"))
+        wls = [w for k, w in enumerate(wls) if k % n == i]
 
-    pack = _StudyPack(menu=_menu(args.reference))
+    pack = _StudyPack(menu=_menu(args.reference), benchmark=args.benchmark)
     print(f"braço={spec.name} model={args.model} workloads={len(wls)} "
           f"max_iters={spec.max_iters} menu={len(pack.menu)} configs "
           f"max_tokens={_MAX_TOKENS}", flush=True)
