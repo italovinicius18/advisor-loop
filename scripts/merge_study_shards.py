@@ -1,37 +1,36 @@
 """Junta os shards do estudo offline (run_llm --shard) e agrega com a mesma funcao
 do estudo (advisor_loop.studies.regret.aggregate).
 
-Uso: python scripts/merge_study_shards.py studies_results/tpcds
-Escreve <dir>/llm_<arm>.json e <dir>/study_summary.json; imprime a tabela.
+Agrupa por prefixo: llm_<arm>[_it<k>_<rep>]_<i>of<n>.json -> llm_<arm>[_it<k>_<rep>].json.
+Os shards da primeira rodada (llm_a3m_0of3.json) viram llm_a3m.json, como antes.
+
+Uso: python -m scripts.merge_study_shards studies_results/tpcds
 """
 import glob
 import json
+import re
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 from advisor_loop.studies.regret import aggregate
 
 D = Path(sys.argv[1])
-summary = {}
-base = json.load(open(D / "baselines.json"))
-for name, v in base.items():
-    summary[name] = v["agg"]
-for arm in ("a3m", "a3t", "a4"):
-    files = sorted(glob.glob(str(D / f"llm_{arm}_*.json")))
+groups = defaultdict(list)
+for f in sorted(glob.glob(str(D / "llm_*.json"))):
+    m = re.match(r"(llm_.+?)_(\d+of\d+|all)\.json$", Path(f).name)
+    if m:
+        groups[m.group(1)].append(f)
+for prefix, files in sorted(groups.items()):
     recs, cost, calls, name = [], 0.0, 0, None
     for f in files:
-        d = json.load(open(f))
-        (name, v), = d.items()
+        (name, v), = json.load(open(f)).items()
         recs += v["records"]
         cost += v["agg"]["cost_usd"]
         calls += v["agg"]["n_llm_calls"]
     keys = {(r["dataset"], r["query"]) for r in recs}
-    assert len(keys) == len(recs), "workload duplicado entre shards"
+    assert len(keys) == len(recs), f"workload duplicado entre shards de {prefix}"
     agg = aggregate({"records": recs, "cost_usd": cost, "n_llm_calls": calls})
-    json.dump({name: {"agg": agg, "records": recs}}, open(D / f"llm_{arm}.json", "w"), indent=2)
-    summary[name] = agg
-json.dump(summary, open(D / "study_summary.json", "w"), indent=2)
-print(f"{'advisor':28s} {'n':>4s} {'hit%':>6s} {'mean':>6s} {'median':>6s} {'p90':>6s} {'US$':>6s}")
-for name, a in summary.items():
-    print(f"{name:28s} {a['n_workloads']:4d} {100 * a['feasibility_hit_rate']:6.1f} {a['regret_mean']:6.3f} "
-          f"{a['regret_median']:6.3f} {a['regret_p90']:6.3f} {a['cost_usd']:6.3f}")
+    json.dump({name: {"agg": agg, "records": recs}}, open(D / f"{prefix}.json", "w"), indent=2)
+    print(f"{prefix:28s} shards={len(files)} n={agg['n_workloads']} viaveis={100 * agg['feasibility_hit_rate']:.1f}% "
+          f"regret={agg['regret_mean']:.3f} US$={agg['cost_usd']:.3f}")

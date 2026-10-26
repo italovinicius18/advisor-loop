@@ -201,3 +201,91 @@ class SurrogateAdvisor:
                history: list = []) -> Recommendation:
         cfg = self._predict(ep.dataset, ep.queries[0])
         return Recommendation(config=cfg, rationale="A2 zero-shot cross-scale transfer")
+
+
+class BOAdvisor:
+    """Otimizacao bayesiana sobre as celulas da grade, no estilo do CherryPick:
+    processo gaussiano (kernel Matern 5/2) sobre log2(cores, mem, instancias)
+    normalizados, objetivo = log(tempo), aquisicao = expected improvement.
+    Sem transferencia entre workloads: cada episodio comeca do zero.
+
+    - inicio: ``n_init`` celulas sorteadas (deterministico por seed+workload);
+    - celula que falha (infeasible/erro) recebe o pior log-tempo observado mais
+      ``fail_penalty``, como em Zhang et al. (PVLDB 2022), que atribuem o pior
+      desempenho visto a configuracoes que derrubam o sistema;
+    - comprimento de escala escolhido pela verossimilhanca marginal numa grade.
+    So numpy (sem scikit-learn/scipy)."""
+
+    _LS = (0.15, 0.25, 0.4, 0.6, 1.0, 1.6)
+
+    def __init__(self, space: list[ConfigVector], seed: int = 0, n_init: int = 2,
+                 fail_penalty: float = 1.0):
+        import numpy as np
+        self.np = np
+        self.space = space
+        self.seed, self.n_init, self.fail_penalty = seed, n_init, fail_penalty
+        x = np.array([[np.log2(c.executor_cores), np.log2(c.executor_memory_gb),
+                       np.log2(c.executor_instances)] for c in space], dtype=float)
+        span = x.max(0) - x.min(0)
+        span[span == 0] = 1.0
+        self.X = (x - x.min(0)) / span
+
+    def _kernel(self, a, b, ls):
+        np = self.np
+        d = np.sqrt(((a[:, None, :] - b[None, :, :]) ** 2).sum(-1)) / ls
+        s5 = np.sqrt(5.0) * d
+        return (1 + s5 + 5.0 * d ** 2 / 3.0) * np.exp(-s5)
+
+    def _fit_predict(self, xi, y, xq):
+        np = self.np
+        mu, sd = y.mean(), (y.std() or 1.0)
+        z = (y - mu) / sd
+        best = None
+        for ls in self._LS:
+            k = self._kernel(xi, xi, ls) + 1e-4 * np.eye(len(xi))
+            try:
+                ch = np.linalg.cholesky(k)
+            except np.linalg.LinAlgError:
+                continue
+            alpha = np.linalg.solve(ch.T, np.linalg.solve(ch, z))
+            nll = 0.5 * z @ alpha + np.log(np.diag(ch)).sum()
+            if best is None or nll < best[0]:
+                best = (nll, ls, ch, alpha)
+        _, ls, ch, alpha = best
+        kq = self._kernel(xq, xi, ls)
+        m = kq @ alpha
+        v = np.linalg.solve(ch, kq.T)
+        var = np.clip(1.0 - (v ** 2).sum(0), 1e-12, None)
+        return m * sd + mu, np.sqrt(var) * sd
+
+    def advise(self, ep: Episode, context: str, probe, memories: list[str],
+               history: list = []) -> Recommendation:
+        import math
+        np = self.np
+        idx = {c.config_hash(): i for i, c in enumerate(self.space)}
+        seen = {idx[c.config_hash()] for c, _ in history if c.config_hash() in idx}
+        unseen = [i for i in range(len(self.space)) if i not in seen]
+        rng = random.Random(f"{self.seed}|{ep.dataset}|{ep.queries[0]}")
+        order = list(range(len(self.space)))
+        rng.shuffle(order)
+        logs = []
+        for _, out in history:
+            qr = next(iter(out.per_query.values()), None) if out.per_query else None
+            ok = qr is not None and qr.status == "success" and qr.duration_ms
+            logs.append(math.log(qr.duration_ms) if ok else None)
+        good = [v for v in logs if v is not None]
+        if len(history) < self.n_init or not good:
+            pick = next(i for i in order if i not in seen)
+            return Recommendation(config=self.space[pick], rationale=f"BO init #{len(history) + 1}")
+        worst = max(good) + self.fail_penalty
+        y = np.array([v if v is not None else worst for v in logs])
+        xi = self.X[[idx[c.config_hash()] for c, _ in history]]
+        m, s = self._fit_predict(xi, y, self.X[unseen])
+        best = y.min()
+        zz = (best - m) / s
+        cdf = 0.5 * (1 + np.array([math.erf(v / math.sqrt(2)) for v in zz]))
+        pdf = np.exp(-0.5 * zz ** 2) / math.sqrt(2 * math.pi)
+        ei = (best - m) * cdf + s * pdf
+        rank = {i: r for r, i in enumerate(order)}      # desempate deterministico
+        j = max(range(len(unseen)), key=lambda k: (round(float(ei[k]), 12), -rank[unseen[k]]))
+        return Recommendation(config=self.space[unseen[j]], rationale=f"BO EI #{len(history) + 1}")
