@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 
 from advisor_loop.advisor.advisor import Advisor
@@ -74,6 +75,8 @@ def main(argv=None) -> int:
     ap.add_argument("--out")
     ap.add_argument("--benchmark", default="TPC-H", help="nome no prompt (TPC-H | TPC-DS)")
     ap.add_argument("--shard", default="", help="i/n: processa so os workloads com indice %% n == i")
+    ap.add_argument("--resume", action="store_true",
+                    help="retoma do --out existente: pula workloads ja gravados e soma o custo ja pago")
     args = ap.parse_args(argv)
 
     # timeout curto por request: um call que estagna falha rápido e é
@@ -94,7 +97,19 @@ def main(argv=None) -> int:
           f"max_iters={spec.max_iters} menu={len(pack.menu)} configs "
           f"max_tokens={_MAX_TOKENS}", flush=True)
 
-    run_records: list = []
+    # --resume: um processo interrompido (sessao encerrada, queda de rede) nao
+    # paga de novo os workloads ja feitos; o custo ja gasto entra no total.
+    done: list = []
+    prior_cost, prior_calls = 0.0, 0
+    if args.resume and args.out and os.path.exists(args.out):
+        (_, prev), = json.load(open(args.out)).items()
+        done = prev["records"]
+        prior_cost, prior_calls = prev["agg"]["cost_usd"], prev["agg"]["n_llm_calls"]
+        have = {(r["dataset"], r["query"]) for r in done}
+        wls = [w for w in wls if w not in have]
+        print(f"retomando: {len(done)} workloads ja feitos, {len(wls)} restantes", flush=True)
+
+    run_records: list = list(done)
 
     def _progress(idx, total, rec, cost):
         run_records.append(rec)
@@ -105,14 +120,16 @@ def main(argv=None) -> int:
         # persistência incremental: se o processo morrer no meio, os workloads
         # já feitos ficam salvos (varredura longa sobre API instável).
         if args.out:
-            partial = {"records": run_records, "cost_usd": journal.cost_usd,
-                       "n_llm_calls": journal.n_llm}
+            partial = {"records": run_records, "cost_usd": prior_cost + journal.cost_usd,
+                       "n_llm_calls": prior_calls + journal.n_llm}
             with open(args.out, "w") as fh:
                 json.dump({spec.name: {"agg": aggregate(partial),
                           "records": run_records}}, fh, indent=2)
 
     run = run_advisor(spec, backend, wls, journal=journal, pack=pack,
                       progress=_progress)
+    run = {"records": done + run["records"], "cost_usd": prior_cost + run["cost_usd"],
+           "n_llm_calls": prior_calls + run["n_llm_calls"]}
     agg = aggregate(run)
     print(json.dumps(agg, indent=2), flush=True)
     if args.out:

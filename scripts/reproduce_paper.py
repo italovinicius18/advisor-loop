@@ -123,23 +123,53 @@ def section_offline():
             res[f] = {"seeds": len(aggs), "regret_mean": round(statistics.mean(a["regret_mean"] for a in aggs), 3),
                       "regret_sd": round(statistics.stdev([a["regret_mean"] for a in aggs]), 3) if len(aggs) > 1 else None,
                       "feasible_pct": round(100 * statistics.mean(a["feasibility_hit_rate"] for a in aggs), 1)}
-        llm = defaultdict(list)
-        for f in sorted(glob.glob(str(d / "llm_*.json"))):
-            stem = Path(f).stem
-            parts = stem.split("_")
-            if len(parts) > 2 and (parts[-1].endswith("of3") or parts[-1] == "all"):
-                continue            # shards: so os agregados
-            (_, v), = json.load(open(f)).items()
-            arm = parts[1]
-            it = next((p for p in parts if p.startswith("it")), "it4")
-            llm[f"{arm}-{it}"].append(v["agg"])
+        llm, recs = defaultdict(list), defaultdict(list)
+        for (arm, it), files in LLM_RUNS[bench].items():
+            for f in files:
+                (_, v), = json.load(open(d / f)).items()
+                llm[f"{arm}-{it}"].append(v["agg"])
+                recs[f"{arm}-{it}"].append({(r["dataset"], r["query"]): r for r in v["records"]})
         for k, aggs in llm.items():
             res[k] = {"runs": len(aggs), "regret_mean": round(statistics.mean(a["regret_mean"] for a in aggs), 3),
                       "regret_sd": round(statistics.stdev([a["regret_mean"] for a in aggs]), 3) if len(aggs) > 1 else None,
                       "feasible_pct": round(100 * statistics.mean(a["feasibility_hit_rate"] for a in aggs), 1),
                       "cost_usd": round(sum(a["cost_usd"] for a in aggs), 2)}
+        res["telemetry"] = _telemetry_effect(recs["a3m-it4"], recs["a3t-it4"])
         out[bench] = res
     return out
+
+
+# Rodadas do estudo offline com o MESMO codigo do advisor. A r1 TPC-H de
+# setembro (studies_results/tpch/llm_*.json) usou uma versao anterior do
+# prompt/contexto (antes de a16db37..54c78aa) e fica fora das medias.
+LLM_RUNS = {
+    "tpch": {("a3m", "it4"): ["llm_a3m_it4_r2.json", "llm_a3m_it4_r3.json", "llm_a3m_it4_r4.json"],
+             ("a3t", "it4"): ["llm_a3t_it4_r2.json", "llm_a3t_it4_r3.json", "llm_a3t_it4_r4.json"],
+             ("a4", "it4"): ["llm_a4_it4_r2.json", "llm_a4_it4_r3.json", "llm_a4_it4_r4.json"],
+             ("a3m", "it8"): ["llm_a3m_it8_r1.json"], ("a3t", "it8"): ["llm_a3t_it8_r1.json"]},
+    "tpcds": {("a3m", "it4"): ["llm_a3m.json", "llm_a3m_it4_r2.json", "llm_a3m_it4_r3.json"],
+              ("a3t", "it4"): ["llm_a3t.json", "llm_a3t_it4_r2.json", "llm_a3t_it4_r3.json"],
+              ("a4", "it4"): ["llm_a4.json", "llm_a4_it4_r2.json", "llm_a4_it4_r3.json"],
+              ("a3m", "it8"): ["llm_a3m_it8_r1.json"], ("a3t", "it8"): ["llm_a3t_it8_r1.json"]},
+}
+
+
+def _telemetry_effect(with_tel, time_only):
+    """Diferenca de regret medio (com telemetria - so tempo) por execucao pareada
+    (r_i com r_i) e bootstrap pareado por workload sobre todas as execucoes."""
+    per_run = []
+    pairs = []
+    for m, t in zip(with_tel, time_only):
+        common = [k for k in m if m[k]["hit"] and k in t and t[k]["hit"]]
+        per_run.append(statistics.mean(m[k]["regret"] for k in common) - statistics.mean(t[k]["regret"] for k in common))
+        pairs += [m[k]["regret"] - t[k]["regret"] for k in common]
+    rng = random.Random(0)
+    bs = sorted(statistics.mean(rng.choices(pairs, k=len(pairs))) for _ in range(5000))
+    rel = statistics.mean(per_run) / statistics.mean(
+        statistics.mean(t[k]["regret"] for k in t if t[k]["hit"]) for t in time_only)
+    return {"diff_per_run": [round(x, 3) for x in per_run], "diff_mean": round(statistics.mean(per_run), 3),
+            "relative": round(rel, 3), "ci95_pooled": [round(bs[125], 3), round(bs[4875], 3)],
+            "worse": sum(p > 1e-9 for p in pairs), "better": sum(p < -1e-9 for p in pairs), "pairs": len(pairs)}
 
 
 def section_rq3():
