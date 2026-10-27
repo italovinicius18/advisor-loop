@@ -26,10 +26,33 @@ _spec.loader.exec_module(gen_sf)
 
 QUEUE_HEAD = """#!/usr/bin/env bash
 # Fila in-cluster das queries representativas (A/B/C) em SF100 e SF500: regua
-# top-3 + hibrido A0 heuristico e A2 Haiku. Gerado por scripts/gen_rep_campaigns.py.
-# 1 run por vez; so disparar com o cluster livre.
+# top-3 + hibrido A0 heuristico e A2 Haiku (2 execucoes cada). Gerado por
+# scripts/gen_rep_campaigns.py. 1 run por vez. Antes de comecar, espera o cluster
+# ficar OCIOSO: nenhum pod Running/Pending no namespace alem da infraestrutura
+# fixa (MinIO, duckdb-probe, prometheus) e da propria fila, por IDLE_NEEDED
+# checagens seguidas de 2 min (30 min). Assim nao disputa com outros trabalhos
+# (SSCAD, exp05) nem dispara na pausa entre duas campanhas deles.
 set -u
 NS=italo-unb
+IDLE_NEEDED=15
+busy_pods() {
+  kubectl get pods -n $NS --no-headers -o custom-columns=N:.metadata.name,P:.status.phase 2>/dev/null \
+    | awk '$2=="Running" || $2=="Pending" {print $1}' \
+    | grep -v -E '^(minio-|duckdb-probe-|prometheus-|advisor-queue)'
+}
+wait_cluster_idle() {
+  local idle=0 busy
+  echo "$(date -u +%FT%TZ) esperando o cluster ficar ocioso ($IDLE_NEEDED checagens seguidas)"
+  while [ $idle -lt $IDLE_NEEDED ]; do
+    busy=$(busy_pods)
+    if [ -z "$busy" ]; then idle=$((idle+1)); else
+      [ $idle -gt 0 ] && echo "$(date -u +%FT%TZ) ocupado de novo: $(echo $busy | head -c 200)"
+      idle=0
+    fi
+    sleep 120
+  done
+  echo "$(date -u +%FT%TZ) cluster ocioso ha 30 min: iniciando a fila"
+}
 wait_pod() {
   local pod=$1 phase=""
   for _ in $(seq 1 1600); do
@@ -42,7 +65,8 @@ wait_pod() {
   echo "$(date -u +%FT%TZ) TIMEOUT $pod (last=$phase)"; return 1
 }
 """
-QUEUE_LOOP = """for name in {names}; do
+QUEUE_LOOP = """wait_cluster_idle
+for name in {names}; do
   pod=advisor-controller-$name
   echo "$(date -u +%FT%TZ) launching $pod"
   kubectl delete pod $pod -n $NS --ignore-not-found --wait=true >/dev/null 2>&1
@@ -92,8 +116,11 @@ baseline: false
 {cfgs}
 """)
             names.append(name)
+        # duas execucoes de cada braco hibrido (licao do SF750: uma so engana)
         for arm, anchor, prov in (("a0-heuristic", "heuristic", "none-heuristic"),
-                                  ("a2-haiku", "llm", "anthropic/claude-haiku-4.5")):
+                                  ("a2-haiku", "llm", "anthropic/claude-haiku-4.5"),
+                                  ("a0-heuristic-r2", "heuristic", "none-heuristic"),
+                                  ("a2-haiku-r2", "llm", "anthropic/claude-haiku-4.5")):
             name = f"{ds}-rep-{arm}"
             _write(ROOT / f"campaigns/{name}.yaml", f"""# Hibrido v4.1, ancora {anchor}, queries representativas em {ds}. Gerado por scripts/gen_rep_campaigns.py.
 name: {name}

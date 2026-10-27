@@ -1,6 +1,6 @@
 import subprocess
 P = "/home/italo/advisor-loop/kubernetes/campaign-pods"
-NAMES = ["sf100-rep-replay", "sf100-rep-replay-r2", "sf100-rep-replay-r3", "sf100-rep-a0-heuristic", "sf100-rep-a2-haiku", "sf500-rep-replay", "sf500-rep-replay-r2", "sf500-rep-replay-r3", "sf500-rep-a0-heuristic", "sf500-rep-a2-haiku"]
+NAMES = ["sf100-rep-replay", "sf100-rep-replay-r2", "sf100-rep-replay-r3", "sf100-rep-a0-heuristic", "sf100-rep-a2-haiku", "sf100-rep-a0-heuristic-r2", "sf100-rep-a2-haiku-r2", "sf500-rep-replay", "sf500-rep-replay-r2", "sf500-rep-replay-r3", "sf500-rep-a0-heuristic", "sf500-rep-a2-haiku", "sf500-rep-a0-heuristic-r2", "sf500-rep-a2-haiku-r2"]
 SSH = ["ssh", "-i", "/home/italo/.ssh/rnp", "-p", "2200", "italo-unb@200.159.254.113"]
 SCP = ["scp", "-i", "/home/italo/.ssh/rnp", "-P", "2200"]
 files = [f"{P}/advisor-controller-{n}.yaml" for n in NAMES] + [f"{P}/queue_rep.sh", f"{P}/advisor-queue-pod.yaml"]
