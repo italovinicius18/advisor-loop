@@ -228,6 +228,41 @@ def section_rq4():
     return out
 
 
+# Queries representativas (2 por categoria, regra fixada antes dos resultados;
+# scripts/gen_rep_campaigns.py): regua top-3 propria por SF, A0 e A2 com 2 execucoes.
+REP_QUERIES = ["q19", "q71", "q94", "q66", "q05", "q02"]
+REP_ARMS = {"A0 heuristic": "a0-heuristic", "A2 Haiku 4.5": "a2-haiku"}
+
+
+def section_rep():
+    out = {}
+    pooled = defaultdict(list)
+    for sf in (100, 500):
+        ruler = [f"sf{sf}-rep-replay", f"sf{sf}-rep-replay-r2", f"sf{sf}-rep-replay-r3"]
+        entry = {"ruler_s": {q: round(r["t_star_harness_ms"] / 1000, 1)
+                             for q, r in rows(f"sf{sf}-rep-a0-heuristic", ruler).items()}}
+        vals = {}
+        for a, arm in REP_ARMS.items():
+            rs = [rows(f"sf{sf}-rep-{arm}{s}", ruler) for s in ("", "-r2")]
+            vals[a] = [r["regret_harness"] for x in rs for r in x.values()]
+            pooled[a] += vals[a]
+            entry[a] = {"runs": [round(med([r["regret_harness"] for r in x.values()]), 3) for x in rs],
+                        "mean_rho_H": round(statistics.mean(vals[a]), 3),
+                        "wins": f"{sum(v < 0 for v in vals[a])}/{len(vals[a])}",
+                        "per_query": {q: [round(x[q]["regret_harness"], 3) for x in rs] for q in REP_QUERIES}}
+        entry["A2_minus_A0"] = round(statistics.mean(vals["A2 Haiku 4.5"]) - statistics.mean(vals["A0 heuristic"]), 3)
+        out[sf] = entry
+    # mesmo bootstrap da secao rq4 (nao pareado, semente 1)
+    a0, a2 = pooled["A0 heuristic"], pooled["A2 Haiku 4.5"]
+    rng = random.Random(1)
+    diffs = sorted(statistics.mean(rng.choices(a2, k=len(a2))) - statistics.mean(rng.choices(a0, k=len(a0)))
+                   for _ in range(10000))
+    out["A2_minus_A0_pooled"] = {"mean": round(statistics.mean(a2) - statistics.mean(a0), 3),
+                                 "ci95": [round(diffs[250], 3), round(diffs[9750], 3)],
+                                 "p_A2_better": round(sum(d < 0 for d in diffs) / 10000, 2), "pairs": len(a2)}
+    return out
+
+
 def section_rq5():
     out, tot = {}, defaultdict(float)
     for name, runs in COST.items():
@@ -275,7 +310,7 @@ def main():
     ap.add_argument("--out", default=str(ROOT / "artifacts/paper_numbers.json"))
     a = ap.parse_args()
     res = {"matrix": section_matrix(), "rq1_rq2": section_offline(), "rq3": section_rq3(),
-           "rq3_tpch": section_rq3_tpch(), "rq4": section_rq4(), "rq5": section_rq5(),
+           "rq3_tpch": section_rq3_tpch(), "rq3_rep": section_rep(), "rq4": section_rq4(), "rq5": section_rq5(),
            "repeats": section_repeats()}
     Path(a.out).write_text(json.dumps(res, indent=2, default=str))
     print(json.dumps(res, indent=1, default=str))
