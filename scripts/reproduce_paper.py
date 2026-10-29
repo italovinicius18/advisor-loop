@@ -62,6 +62,8 @@ COST = {
     "Anchor ablation (SF100)": ANCHORS["A0 heuristic"] + ANCHORS["A1 small model"] + ANCHORS["A2 Haiku 4.5"]
     + ANCHORS["A3 Sonnet 5"],
     "Anchors (H)": ["tpch-sf500-a2-haiku", "tpch-sf500-a0-heuristic", "tpch-sf750-a2-haiku", "tpch-sf750-a0-heuristic"],
+    "Representative queries (DS)": [f"sf{sf}-rep-{a}{s}" for sf in (100, 500) for a in ("a0-heuristic", "a2-haiku")
+                                    for s in ("", "-r2")],
 }
 
 
@@ -263,6 +265,67 @@ def section_rep():
     return out
 
 
+def _best_cfg(run):
+    """{query: (best_duration_ms, best_config)} das linhas opt_result de um journal."""
+    out = {}
+    for r in _load_opt_results(jpath(run)):
+        if r.get("best_duration_ms") and r.get("best_config"):
+            q = r["query"]
+            if q not in out or r["best_duration_ms"] < out[q][0]:
+                out[q] = (r["best_duration_ms"], r["best_config"])
+    return out
+
+
+def _cores(c):
+    return c["executor_cores"] * c["executor_instances"]
+
+
+def section_resources():
+    """Quantos nucleos o hibrido usa contra a celula da regua (a mais rapida dos
+    replays) e o regret em nucleo-segundo, (t_A * nucleos_A) / (t_H * nucleos_H) - 1."""
+    groups = {f"Hybrid SF{sf}": (runs, RULER[sf]) for sf, runs in HYBRID.items()}
+    groups["Anchors SF100"] = (ANCHORS["A0 heuristic"] + ANCHORS["A2 Haiku 4.5"], RULER[100])
+    for sf in (100, 500):
+        groups[f"Representative SF{sf}"] = ([f"sf{sf}-rep-{a}{s}" for a in ("a0-heuristic", "a2-haiku")
+                                             for s in ("", "-r2")],
+                                            [f"sf{sf}-rep-replay", f"sf{sf}-rep-replay-r2", f"sf{sf}-rep-replay-r3"])
+    for sf in (500, 750):
+        groups[f"TPC-H SF{sf}"] = ([f"tpch-sf{sf}-a0-heuristic", f"tpch-sf{sf}-a2-haiku"], TPCH_RULER[sf])
+    out = {}
+    for name, (runs, ruler) in groups.items():
+        rb = {}
+        for rr in ruler:
+            for q, v in _best_cfg(rr).items():
+                if q not in rb or v[0] < rb[q][0]:
+                    rb[q] = v
+        ratio, rho, rho_cs = [], [], []
+        for run in runs:
+            for q, (t, c) in _best_cfg(run).items():
+                if q in rb:
+                    tr, cr = rb[q]
+                    ratio.append(_cores(c) / _cores(cr))
+                    rho.append(t / tr - 1)
+                    rho_cs.append(t * _cores(c) / (tr * _cores(cr)) - 1)
+        out[name] = {"pairs": len(ratio), "rho_H_median": round(med(rho), 2),
+                     "cores_ratio_median": round(med(ratio), 2),
+                     "rho_core_seconds_median": round(med(rho_cs), 2),
+                     "more_cores": f"{sum(r > 1.001 for r in ratio)}/{len(ratio)}"}
+    return out
+
+
+def section_llm_usage():
+    """Tokens por chamada de modelo nas campanhas online (medianas)."""
+    by = defaultdict(list)
+    for f in glob.glob(str(J / "journal-*.jsonl")):
+        for l in open(f):
+            r = json.loads(l)
+            if r.get("kind") == "llm_call" and (r.get("usage") or {}).get("prompt_tokens"):
+                by[r["model"]].append(r["usage"])
+    return {m: {"calls": len(us), "prompt_tokens_median": round(med([u["prompt_tokens"] for u in us])),
+                "completion_tokens_median": round(med([u["completion_tokens"] for u in us]))}
+            for m, us in by.items()}
+
+
 def section_rq5():
     out, tot = {}, defaultdict(float)
     for name, runs in COST.items():
@@ -310,7 +373,8 @@ def main():
     ap.add_argument("--out", default=str(ROOT / "artifacts/paper_numbers.json"))
     a = ap.parse_args()
     res = {"matrix": section_matrix(), "rq1_rq2": section_offline(), "rq3": section_rq3(),
-           "rq3_tpch": section_rq3_tpch(), "rq3_rep": section_rep(), "rq4": section_rq4(), "rq5": section_rq5(),
+           "rq3_tpch": section_rq3_tpch(), "rq3_rep": section_rep(), "resources": section_resources(),
+           "llm_usage": section_llm_usage(), "rq4": section_rq4(), "rq5": section_rq5(),
            "repeats": section_repeats()}
     Path(a.out).write_text(json.dumps(res, indent=2, default=str))
     print(json.dumps(res, indent=1, default=str))
