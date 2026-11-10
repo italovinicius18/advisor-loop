@@ -1,0 +1,17 @@
+# A0: anchor heuristico determinístico (perfil da iteracao 0 -> cores totais; shuffle>=1GB -> consolidado). Sem chamada a modelo.
+# Escada de ablacao do anchor (tudo o mais igual ao cluster-smoke-sf100-hybrid3-sonnet):
+# se A0/A1 empatarem com A3, o harness e a contribuicao e o modelo e um knob de custo.
+name: cluster-smoke-sf100-hybrid3-a0-heuristic
+mode: optimize
+backend: spark_k8s
+arm: hybrid
+llm_every: 3
+knobs: matrix3
+level: L0
+anchor: heuristic
+provider: none-heuristic
+datasets: [sf100]
+queries: [q03, q23, q50]
+tries: 3
+max_iters: 8
+patience: 3

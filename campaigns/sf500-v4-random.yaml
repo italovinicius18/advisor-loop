@@ -1,0 +1,13 @@
+# v4.1: controle random-8 amostrando DENTRO do envelope de escala em sf500.
+name: sf500-v4-random
+mode: optimize
+backend: spark_k8s
+arm: random
+seed: 1
+level: L0
+provider: random-free-8
+datasets: [sf500]
+queries: [q03, q23, q50]
+tries: 3
+max_iters: 8
+patience: 3

@@ -1,0 +1,33 @@
+# tpch-sf500-replay (multi-SF; gerado por scripts/gen_sf_campaigns.py)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: advisor-controller-tpch-sf500-replay
+  namespace: italo-unb
+  labels:
+    app: advisor-controller
+    campaign: tpch-sf500-replay
+spec:
+  serviceAccountName: ns-admin
+  restartPolicy: Never
+  imagePullSecrets:
+    - name: ghcr-pull
+  nodeSelector:
+    kubernetes.io/hostname: ids-pb
+  containers:
+    - name: controller
+      image: ghcr.io/italovinicius18/advisor-controller:sf100-r23
+      imagePullPolicy: Always
+      env:
+        - name: CAMPAIGN
+          value: campaigns/tpch-sf500-replay.yaml
+        - name: RESULT_PREFIX
+          value: tpch-sf500-replay
+        - name: OPENROUTER_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: advisor-secrets
+              key: OPENROUTER_API_KEY
+      resources:
+        requests: {memory: "512Mi", cpu: "250m"}
+        limits: {memory: "1Gi", cpu: "500m"}

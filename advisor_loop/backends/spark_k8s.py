@@ -28,7 +28,8 @@ class SparkK8sBackend:
         """Gera run_id padrão a partir de uuid4."""
         return str(uuid.uuid4())[:8]
 
-    def execute(self, ep: Episode, rec: Recommendation, tries: int = 1) -> Outcome:
+    def execute(self, ep: Episode, rec: Recommendation, tries: int = 1,
+                wall_clock_s: float | None = None) -> Outcome:
         per_query = {}
         total_wall_clock_ms = 0.0
         outcome_status = "completed"
@@ -36,7 +37,7 @@ class SparkK8sBackend:
         for query in ep.queries:
             run_id = self.run_id_fn()
             result_dict = self.submitter.submit(rec.config, ep.dataset, query, run_id,
-                                                tries=tries)
+                                                tries=tries, wall_clock_s=wall_clock_s)
 
             # Map dict to QueryResult
             query_result = QueryResult(

@@ -18,6 +18,19 @@ def _runner_never_terminal(calls):
     return run
 
 
+def test_error_excerpt_keeps_error_lines_not_boot_warnings():
+    from advisor_loop.backends.spark_submitter import error_excerpt
+    logs = "\n".join(["WARNING: Using incubator modules", "26/09/12 WARN NativeCodeLoader ...",
+                      "Using Spark's default log4j profile"] + ["INFO x"] * 50 +
+                     ["java.lang.OutOfMemoryError: Java heap space",
+                      "ERROR SparkContext: Error initializing SparkContext.",
+                      "Exception in thread main ... exit code 137"])
+    ex = error_excerpt(logs)
+    assert "OutOfMemoryError" in ex and "exit code 137" in ex
+    assert "incubator" not in ex and "INFO x" not in ex
+    assert error_excerpt("so info\nnada de erro") == "so info\nnada de erro"
+
+
 def test_timeout_budget_scales_with_tries(monkeypatch):
     calls = []
     sub = SparkSubmitter(ssh_cmd=["bash", "-c"], image="img", poll_interval_s=100,

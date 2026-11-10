@@ -23,6 +23,7 @@ RUN cd /opt/spark/jars && \
     curl -fsSLO ${MVN}/software/amazon/s3/analyticsaccelerator/analyticsaccelerator-s3/${AAL_VER}/analyticsaccelerator-s3-${AAL_VER}.jar
 COPY spark_advisor/driver.py /opt/advisor/driver.py
 COPY queries/ /opt/advisor/queries/
+COPY queries-tpch/ /opt/advisor/queries-tpch/
 # Pod template (nodeAffinity ao pool de egress) assado na imagem: o driver le o
 # executor.podTemplateFile do proprio FS e o launcher le o driver.podTemplateFile
 # do seu FS -> todos usam esta imagem, entao o arquivo esta presente nos tres.

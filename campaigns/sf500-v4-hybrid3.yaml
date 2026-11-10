@@ -1,0 +1,14 @@
+# v4.1: hibrido3 (Sonnet) em sf500 com baseline dimensionada pelo envelope.
+name: sf500-v4-hybrid3
+mode: optimize
+backend: spark_k8s
+arm: hybrid
+llm_every: 3
+knobs: matrix3
+level: L0
+provider: anthropic/claude-sonnet-5
+datasets: [sf500]
+queries: [q03, q23, q50]
+tries: 3
+max_iters: 8
+patience: 3

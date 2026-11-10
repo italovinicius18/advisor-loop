@@ -7,6 +7,13 @@ def _cv(**o):
                 aqe_enabled=True, broadcast_threshold_mb=10)
     return ConfigVector(**{**base, **o})
 
+def test_overhead_factor_keeps_96g_under_limitrange():
+    args = " ".join(spark_confs(_cv(executor_memory_gb=96, executor_cores=24)))
+    assert "spark.executor.memoryOverheadFactor=0.1" in args
+    assert "spark.driver.memoryOverheadFactor=0.1" in args
+    assert 96 * 1.1 < 128          # limite do pod cabe na LimitRange (max 128Gi)
+
+
 def test_translation():
     c = spark_confs(_cv())
     s = " ".join(c)

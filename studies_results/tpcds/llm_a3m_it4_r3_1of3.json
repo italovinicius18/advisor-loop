@@ -1,0 +1,2094 @@
+{
+  "A3m-llm-online+telemetry": {
+    "agg": {
+      "n_workloads": 231,
+      "feasibility_hit_rate": 0.9956709956709957,
+      "regret_mean": 0.21944009383612825,
+      "regret_median": 0.12611213559467216,
+      "regret_p90": 0.5232105463664707,
+      "cost_usd": 0.10225860679199983,
+      "n_llm_calls": 925
+    },
+    "records": [
+      {
+        "dataset": "sf10",
+        "query": "q02",
+        "best_ms": 5961.7,
+        "oracle_ms": 5961.7,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q05",
+        "best_ms": 14465.4,
+        "oracle_ms": 13006.69,
+        "regret": 0.11215074703863936,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q08",
+        "best_ms": 9526.48,
+        "oracle_ms": 9136.88,
+        "regret": 0.04264037614590532,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q11",
+        "best_ms": 18525.93,
+        "oracle_ms": 16472.57,
+        "regret": 0.12465328725268732,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q14",
+        "best_ms": 37386.86,
+        "oracle_ms": 33972.82,
+        "regret": 0.10049327668412578,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q17",
+        "best_ms": 22199.03,
+        "oracle_ms": 17406.21,
+        "regret": 0.2753511534101909,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q20",
+        "best_ms": 7178.26,
+        "oracle_ms": 6603.18,
+        "regret": 0.08709137112724474,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q23",
+        "best_ms": 22700.67,
+        "oracle_ms": 21266.58,
+        "regret": 0.06743397386885897,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q26",
+        "best_ms": 7852.02,
+        "oracle_ms": 7161.29,
+        "regret": 0.09645329263303126,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q29",
+        "best_ms": 20039.48,
+        "oracle_ms": 16339.07,
+        "regret": 0.22647617030834688,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q32",
+        "best_ms": 7641.82,
+        "oracle_ms": 6522.95,
+        "regret": 0.17152821959389541,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q35",
+        "best_ms": 14133.43,
+        "oracle_ms": 14133.43,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q38",
+        "best_ms": 11678.67,
+        "oracle_ms": 11479.13,
+        "regret": 0.017382850442498876,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q41",
+        "best_ms": 3427.41,
+        "oracle_ms": 2976.69,
+        "regret": 0.15141650625359038,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q44",
+        "best_ms": 12065.32,
+        "oracle_ms": 8284.9,
+        "regret": 0.45630242972154167,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q47",
+        "best_ms": 12219.43,
+        "oracle_ms": 10516.74,
+        "regret": 0.16190283300718677,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q50",
+        "best_ms": 14587.48,
+        "oracle_ms": 11902.12,
+        "regret": 0.2256203096591194,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q53",
+        "best_ms": 7771.6,
+        "oracle_ms": 7366.74,
+        "regret": 0.05495782394926385,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q56",
+        "best_ms": 14153.36,
+        "oracle_ms": 11808.81,
+        "regret": 0.19854244415821753,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q59",
+        "best_ms": 6649.28,
+        "oracle_ms": 6649.28,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q62",
+        "best_ms": 6307.96,
+        "oracle_ms": 6037.08,
+        "regret": 0.04486937393574375,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q65",
+        "best_ms": 13266.6,
+        "oracle_ms": 10720.79,
+        "regret": 0.23746477638308372,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q68",
+        "best_ms": 9983.3,
+        "oracle_ms": 9725.02,
+        "regret": 0.026558300137171864,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q71",
+        "best_ms": 9867.43,
+        "oracle_ms": 9386.65,
+        "regret": 0.05121955117107824,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q74",
+        "best_ms": 18114.43,
+        "oracle_ms": 14638.74,
+        "regret": 0.237430953756949,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q77",
+        "best_ms": 11416.72,
+        "oracle_ms": 10723.14,
+        "regret": 0.06468068121837445,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q80",
+        "best_ms": 21031.84,
+        "oracle_ms": 19327.02,
+        "regret": 0.08820914967749816,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q83",
+        "best_ms": 8799.58,
+        "oracle_ms": 7018.11,
+        "regret": 0.25383899653895425,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q86",
+        "best_ms": 6652.09,
+        "oracle_ms": 4865.53,
+        "regret": 0.3671871306928538,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q89",
+        "best_ms": 8470.13,
+        "oracle_ms": 7226.88,
+        "regret": 0.17203136069783898,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q92",
+        "best_ms": 6548.34,
+        "oracle_ms": 5475.5,
+        "regret": 0.19593461784311939,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q95",
+        "best_ms": 15327.1,
+        "oracle_ms": 12899.13,
+        "regret": 0.18822742308977447,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf10",
+        "query": "q98",
+        "best_ms": 8958.56,
+        "oracle_ms": 7866.36,
+        "regret": 0.1388443956289822,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q02",
+        "best_ms": 16632.83,
+        "oracle_ms": 14262.52,
+        "regret": 0.16619152856577957,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q05",
+        "best_ms": 49644.83,
+        "oracle_ms": 29599.88,
+        "regret": 0.6771970021500087,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q08",
+        "best_ms": 18680.34,
+        "oracle_ms": 18102.67,
+        "regret": 0.03191076233505896,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q11",
+        "best_ms": 65671.96,
+        "oracle_ms": 50754.98,
+        "regret": 0.29390180037505687,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q14",
+        "best_ms": 94382.13,
+        "oracle_ms": 82909.61,
+        "regret": 0.13837382662878284,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q17",
+        "best_ms": 37573.04,
+        "oracle_ms": 20905.14,
+        "regret": 0.7973110919132806,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q20",
+        "best_ms": 17511.66,
+        "oracle_ms": 17143.91,
+        "regret": 0.021450765898794355,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q23",
+        "best_ms": 97010.87,
+        "oracle_ms": 97010.87,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q26",
+        "best_ms": 15891.1,
+        "oracle_ms": 15162.2,
+        "regret": 0.04807349856880916,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q29",
+        "best_ms": 41607.56,
+        "oracle_ms": 31055.06,
+        "regret": 0.33979969769821716,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q32",
+        "best_ms": 21662.55,
+        "oracle_ms": 13265.7,
+        "regret": 0.6329745132182998,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q35",
+        "best_ms": 29775.04,
+        "oracle_ms": 27530.82,
+        "regret": 0.08151664207604425,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q38",
+        "best_ms": 23686.43,
+        "oracle_ms": 21590.93,
+        "regret": 0.09705464285234577,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q41",
+        "best_ms": 4320.31,
+        "oracle_ms": 3134.93,
+        "regret": 0.378120085615947,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q44",
+        "best_ms": 29860.32,
+        "oracle_ms": 16347.74,
+        "regret": 0.8265717463086641,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q47",
+        "best_ms": 32059.12,
+        "oracle_ms": 31070.8,
+        "regret": 0.031808643485201626,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q50",
+        "best_ms": 60010.34,
+        "oracle_ms": 56169.25,
+        "regret": 0.06838421378245219,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q53",
+        "best_ms": 22981.31,
+        "oracle_ms": 19477.84,
+        "regret": 0.17986953378814086,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q56",
+        "best_ms": 44731.63,
+        "oracle_ms": 36923.26,
+        "regret": 0.21147563893329013,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q59",
+        "best_ms": 20252.85,
+        "oracle_ms": 17501.73,
+        "regret": 0.1571913176583115,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q62",
+        "best_ms": 10295.45,
+        "oracle_ms": 9525.89,
+        "regret": 0.08078615226503794,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q65",
+        "best_ms": 44212.88,
+        "oracle_ms": 44212.88,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q68",
+        "best_ms": 21520.79,
+        "oracle_ms": 21278.08,
+        "regret": 0.011406574277378345,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q71",
+        "best_ms": 31093.72,
+        "oracle_ms": 26003.14,
+        "regret": 0.19576789572336262,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q74",
+        "best_ms": 49830.95,
+        "oracle_ms": 38553.56,
+        "regret": 0.2925122868030865,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q77",
+        "best_ms": 23451.49,
+        "oracle_ms": 22136.19,
+        "regret": 0.05941853589077439,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q80",
+        "best_ms": 61843.65,
+        "oracle_ms": 35778.78,
+        "regret": 0.72850080410791,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q83",
+        "best_ms": 12939.04,
+        "oracle_ms": 12077.88,
+        "regret": 0.07130059248808585,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q86",
+        "best_ms": 14078.86,
+        "oracle_ms": 10641.18,
+        "regret": 0.32305439810246606,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q89",
+        "best_ms": 23057.57,
+        "oracle_ms": 21061.32,
+        "regret": 0.09478275815570925,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q92",
+        "best_ms": 16282.64,
+        "oracle_ms": 14847.63,
+        "regret": 0.09664909483870487,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q95",
+        "best_ms": 53088.93,
+        "oracle_ms": 33193.39,
+        "regret": 0.5993825879188597,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf100",
+        "query": "q98",
+        "best_ms": 20787.18,
+        "oracle_ms": 20787.18,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q02",
+        "best_ms": 171626.53,
+        "oracle_ms": 108236.04,
+        "regret": 0.5856689694116675,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q05",
+        "best_ms": 257705.19,
+        "oracle_ms": 199418.04,
+        "regret": 0.29228624451428753,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q08",
+        "best_ms": 111456.88,
+        "oracle_ms": 72541.51,
+        "regret": 0.5364565750009893,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q11",
+        "best_ms": 616419.23,
+        "oracle_ms": 502028.6,
+        "regret": 0.2278567993935008,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q14",
+        "best_ms": 676977.21,
+        "oracle_ms": 637694.85,
+        "regret": 0.0616005602052454,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q17",
+        "best_ms": 228517.27,
+        "oracle_ms": 201297.65,
+        "regret": 0.13522075394322774,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q20",
+        "best_ms": 105408.19,
+        "oracle_ms": 105408.19,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q23",
+        "best_ms": 1140185.28,
+        "oracle_ms": 1140185.28,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q26",
+        "best_ms": 86507.43,
+        "oracle_ms": 86507.43,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q29",
+        "best_ms": 297676.36,
+        "oracle_ms": 290433.49,
+        "regret": 0.024938136438741987,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q32",
+        "best_ms": 152508.58,
+        "oracle_ms": 152508.58,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q35",
+        "best_ms": 182492.72,
+        "oracle_ms": 129467.38,
+        "regret": 0.40956525110803965,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q38",
+        "best_ms": 217777.16,
+        "oracle_ms": 152146.13,
+        "regret": 0.4313683824885983,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q41",
+        "best_ms": 4059.64,
+        "oracle_ms": 3100.51,
+        "regret": 0.3093458818065413,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q44",
+        "best_ms": 195989.4,
+        "oracle_ms": 146913.92,
+        "regret": 0.33404241068511387,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q47",
+        "best_ms": null,
+        "oracle_ms": 192276.2,
+        "regret": null,
+        "hit": false,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q50",
+        "best_ms": 778765.5,
+        "oracle_ms": 725186.28,
+        "regret": 0.07388338896869362,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q53",
+        "best_ms": 164201.32,
+        "oracle_ms": 159838.43,
+        "regret": 0.027295625964294246,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q56",
+        "best_ms": 366387.27,
+        "oracle_ms": 366387.27,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q59",
+        "best_ms": 203711.74,
+        "oracle_ms": 132568.49,
+        "regret": 0.5366527898145328,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q62",
+        "best_ms": 44428.8,
+        "oracle_ms": 33689.37,
+        "regret": 0.318778000300985,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q65",
+        "best_ms": 495166.52,
+        "oracle_ms": 464108.23,
+        "regret": 0.0669203603650812,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q68",
+        "best_ms": 110537.17,
+        "oracle_ms": 103237.26,
+        "regret": 0.07071003240496698,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q71",
+        "best_ms": 233495.36,
+        "oracle_ms": 226838.62,
+        "regret": 0.0293457084159654,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q74",
+        "best_ms": 460755.1,
+        "oracle_ms": 460755.1,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q77",
+        "best_ms": 236889.98,
+        "oracle_ms": 160473.87,
+        "regret": 0.47619036046179986,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q80",
+        "best_ms": 266735.63,
+        "oracle_ms": 248034.16,
+        "regret": 0.07539876765361675,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q83",
+        "best_ms": 35611.81,
+        "oracle_ms": 35611.81,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q86",
+        "best_ms": 54133.17,
+        "oracle_ms": 52974.48,
+        "regret": 0.021872607338476957,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q89",
+        "best_ms": 159369.85,
+        "oracle_ms": 150597.86,
+        "regret": 0.058247773241930645,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q92",
+        "best_ms": 52563.52,
+        "oracle_ms": 34541.75,
+        "regret": 0.5217387654070798,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q95",
+        "best_ms": 312411.8,
+        "oracle_ms": 136582.21,
+        "regret": 1.2873535286916211,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf1000",
+        "query": "q98",
+        "best_ms": 136836.63,
+        "oracle_ms": 136836.63,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q02",
+        "best_ms": 33982.94,
+        "oracle_ms": 24722.35,
+        "regret": 0.37458372687062536,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q05",
+        "best_ms": 66171.42,
+        "oracle_ms": 48395.69,
+        "regret": 0.36729985666078924,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q08",
+        "best_ms": 24632.47,
+        "oracle_ms": 23280.49,
+        "regret": 0.058073519930207596,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q11",
+        "best_ms": 130564.83,
+        "oracle_ms": 91352.58,
+        "regret": 0.42924075050753907,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q14",
+        "best_ms": 168803.18,
+        "oracle_ms": 150976.66,
+        "regret": 0.11807467458877419,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q17",
+        "best_ms": 74070.61,
+        "oracle_ms": 40087.42,
+        "regret": 0.8477270425485104,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q20",
+        "best_ms": 26106.01,
+        "oracle_ms": 23108.74,
+        "regret": 0.1297028743237405,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q23",
+        "best_ms": 555291.09,
+        "oracle_ms": 279210.14,
+        "regret": 0.988792706453999,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q26",
+        "best_ms": 23340.81,
+        "oracle_ms": 19156.24,
+        "regret": 0.21844422496272742,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q29",
+        "best_ms": 67767.65,
+        "oracle_ms": 67767.65,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q32",
+        "best_ms": 31629.71,
+        "oracle_ms": 19780.11,
+        "regret": 0.5990664359298303,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q35",
+        "best_ms": 50818.59,
+        "oracle_ms": 43377.16,
+        "regret": 0.1715518028381755,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q38",
+        "best_ms": 53245.9,
+        "oracle_ms": 39514.47,
+        "regret": 0.3475038384672755,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q41",
+        "best_ms": 4031.78,
+        "oracle_ms": 3434.86,
+        "regret": 0.1737829198278824,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q44",
+        "best_ms": 53903.74,
+        "oracle_ms": 30321.05,
+        "regret": 0.7777662712867792,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q47",
+        "best_ms": 56092.41,
+        "oracle_ms": 55451.07,
+        "regret": 0.011565872398855426,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q50",
+        "best_ms": 188943.49,
+        "oracle_ms": 126187.76,
+        "regret": 0.4973202630746436,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q53",
+        "best_ms": 43587.66,
+        "oracle_ms": 34438.07,
+        "regret": 0.2656824264542119,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q56",
+        "best_ms": 76679.97,
+        "oracle_ms": 69471.3,
+        "regret": 0.10376472010744009,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q59",
+        "best_ms": 39802.03,
+        "oracle_ms": 28756.04,
+        "regret": 0.3841276476176829,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q62",
+        "best_ms": 15310.18,
+        "oracle_ms": 15126.62,
+        "regret": 0.01213489860920669,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q65",
+        "best_ms": 96777.19,
+        "oracle_ms": 89049.17,
+        "regret": 0.0867837398147564,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q68",
+        "best_ms": 34924.27,
+        "oracle_ms": 34924.27,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q71",
+        "best_ms": 50517.12,
+        "oracle_ms": 49947.53,
+        "regret": 0.011403767113208785,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q74",
+        "best_ms": 97310.99,
+        "oracle_ms": 87024.77,
+        "regret": 0.11819876111134797,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q77",
+        "best_ms": 37562.3,
+        "oracle_ms": 37562.3,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q80",
+        "best_ms": 67901.11,
+        "oracle_ms": 45077.38,
+        "regret": 0.5063233488725389,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q83",
+        "best_ms": 16772.21,
+        "oracle_ms": 15408.04,
+        "regret": 0.08853624471379873,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q86",
+        "best_ms": 19957.74,
+        "oracle_ms": 17111.11,
+        "regret": 0.1663615043091886,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q89",
+        "best_ms": 43812.74,
+        "oracle_ms": 36298.9,
+        "regret": 0.20699911016587258,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q92",
+        "best_ms": 22777.42,
+        "oracle_ms": 16044.59,
+        "regret": 0.4196324119220247,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q95",
+        "best_ms": 122988.56,
+        "oracle_ms": 47577.18,
+        "regret": 1.585032572338251,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf250",
+        "query": "q98",
+        "best_ms": 35480.62,
+        "oracle_ms": 31699.95,
+        "regret": 0.11926422596881081,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q02",
+        "best_ms": 9220.46,
+        "oracle_ms": 8259.14,
+        "regret": 0.11639468516092477,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q05",
+        "best_ms": 20038.88,
+        "oracle_ms": 20038.88,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q08",
+        "best_ms": 12344.72,
+        "oracle_ms": 12344.72,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q11",
+        "best_ms": 46108.35,
+        "oracle_ms": 37129.12,
+        "regret": 0.24183794283301063,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q14",
+        "best_ms": 79348.28,
+        "oracle_ms": 74959.96,
+        "regret": 0.058542187055595996,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q17",
+        "best_ms": 50676.97,
+        "oracle_ms": 40536.07,
+        "regret": 0.250169787056318,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q20",
+        "best_ms": 11106.43,
+        "oracle_ms": 9691.69,
+        "regret": 0.14597454107591146,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q23",
+        "best_ms": 61832.9,
+        "oracle_ms": 57362.51,
+        "regret": 0.07793225924039926,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q26",
+        "best_ms": 9700.23,
+        "oracle_ms": 9700.23,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q29",
+        "best_ms": 56744.25,
+        "oracle_ms": 45389.25,
+        "regret": 0.2501693682975594,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q32",
+        "best_ms": 14084.35,
+        "oracle_ms": 13411.16,
+        "regret": 0.05019625446270126,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q35",
+        "best_ms": 22984.71,
+        "oracle_ms": 19781.2,
+        "regret": 0.16194720239419236,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q38",
+        "best_ms": 17445.62,
+        "oracle_ms": 17445.62,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q41",
+        "best_ms": 3198.95,
+        "oracle_ms": 2360.48,
+        "regret": 0.35521165186741666,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q44",
+        "best_ms": 23895.6,
+        "oracle_ms": 11685.24,
+        "regret": 1.0449387432350554,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q47",
+        "best_ms": 20626.88,
+        "oracle_ms": 19702.88,
+        "regret": 0.046896697335617965,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q50",
+        "best_ms": 33294.11,
+        "oracle_ms": 32006.89,
+        "regret": 0.04021696578455458,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q53",
+        "best_ms": 14110.86,
+        "oracle_ms": 14110.86,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q56",
+        "best_ms": 25393.58,
+        "oracle_ms": 24631.6,
+        "regret": 0.030935059029864265,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q59",
+        "best_ms": 9009.29,
+        "oracle_ms": 8894.49,
+        "regret": 0.01290686706039379,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q62",
+        "best_ms": 7905.66,
+        "oracle_ms": 7298.47,
+        "regret": 0.08319414891066201,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q65",
+        "best_ms": 25418.24,
+        "oracle_ms": 24929.23,
+        "regret": 0.01961592877116547,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q68",
+        "best_ms": 14996.63,
+        "oracle_ms": 14996.63,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q71",
+        "best_ms": 17258.52,
+        "oracle_ms": 16209.17,
+        "regret": 0.06473804642680658,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q74",
+        "best_ms": 36507.67,
+        "oracle_ms": 34824.91,
+        "regret": 0.04832058431737507,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q77",
+        "best_ms": 15939.6,
+        "oracle_ms": 15939.6,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q80",
+        "best_ms": 52498.12,
+        "oracle_ms": 52498.12,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q83",
+        "best_ms": 9809.77,
+        "oracle_ms": 8855.44,
+        "regret": 0.10776765468457805,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q86",
+        "best_ms": 9615.36,
+        "oracle_ms": 7933.71,
+        "regret": 0.21196262530392462,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q89",
+        "best_ms": 14959.32,
+        "oracle_ms": 14205.75,
+        "regret": 0.05304682962884755,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q92",
+        "best_ms": 11128.09,
+        "oracle_ms": 8036.79,
+        "regret": 0.38464362015182685,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q95",
+        "best_ms": 22996.88,
+        "oracle_ms": 18431.67,
+        "regret": 0.24768292835103956,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf50",
+        "query": "q98",
+        "best_ms": 13806.48,
+        "oracle_ms": 12261.68,
+        "regret": 0.12598599865597526,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q02",
+        "best_ms": 55378.98,
+        "oracle_ms": 42721.48,
+        "regret": 0.2962795296417633,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q05",
+        "best_ms": 91330.0,
+        "oracle_ms": 90867.22,
+        "regret": 0.005092925699718753,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q08",
+        "best_ms": 44232.74,
+        "oracle_ms": 34808.86,
+        "regret": 0.27073222162403465,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q11",
+        "best_ms": 253895.27,
+        "oracle_ms": 232425.89,
+        "regret": 0.09237086281566986,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q14",
+        "best_ms": 270706.1,
+        "oracle_ms": 240363.08,
+        "regret": 0.12623827253336906,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q17",
+        "best_ms": 117318.72,
+        "oracle_ms": 68699.92,
+        "regret": 0.7076980584547989,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q20",
+        "best_ms": 42156.05,
+        "oracle_ms": 37255.17,
+        "regret": 0.13154899038173773,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q23",
+        "best_ms": 610001.6,
+        "oracle_ms": 490663.77,
+        "regret": 0.2432171219815149,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q26",
+        "best_ms": 35537.85,
+        "oracle_ms": 29854.22,
+        "regret": 0.19037945054334027,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q29",
+        "best_ms": 123244.23,
+        "oracle_ms": 112600.89,
+        "regret": 0.09452269871046304,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q32",
+        "best_ms": 51536.26,
+        "oracle_ms": 33896.14,
+        "regret": 0.5204167790196761,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q35",
+        "best_ms": 74673.93,
+        "oracle_ms": 73024.54,
+        "regret": 0.02258679068707581,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q38",
+        "best_ms": 88675.87,
+        "oracle_ms": 69192.73,
+        "regret": 0.2815778478461537,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q41",
+        "best_ms": 3081.2,
+        "oracle_ms": 3024.05,
+        "regret": 0.018898497048659868,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q44",
+        "best_ms": 100436.9,
+        "oracle_ms": 59637.12,
+        "regret": 0.6841339756178701,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q47",
+        "best_ms": 89950.47,
+        "oracle_ms": 81384.8,
+        "regret": 0.10524901455800095,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q50",
+        "best_ms": 220642.93,
+        "oracle_ms": 203207.25,
+        "regret": 0.08580245045390855,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q53",
+        "best_ms": 56477.63,
+        "oracle_ms": 49535.95,
+        "regret": 0.14013418537446043,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q56",
+        "best_ms": 152645.11,
+        "oracle_ms": 134782.44,
+        "regret": 0.1325296529725979,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q59",
+        "best_ms": 47203.9,
+        "oracle_ms": 47203.9,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q62",
+        "best_ms": 21333.26,
+        "oracle_ms": 20576.59,
+        "regret": 0.03677334291055989,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q65",
+        "best_ms": 128750.72,
+        "oracle_ms": 121793.56,
+        "regret": 0.05712256050319908,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q68",
+        "best_ms": 55676.73,
+        "oracle_ms": 55676.73,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q71",
+        "best_ms": 77791.88,
+        "oracle_ms": 65757.03,
+        "regret": 0.18301997520265134,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q74",
+        "best_ms": 213531.95,
+        "oracle_ms": 184950.65,
+        "regret": 0.15453473669868156,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q77",
+        "best_ms": 65832.42,
+        "oracle_ms": 65832.42,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q80",
+        "best_ms": 93546.78,
+        "oracle_ms": 83386.63,
+        "regret": 0.12184387353224357,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q83",
+        "best_ms": 18419.13,
+        "oracle_ms": 18419.13,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q86",
+        "best_ms": 22092.39,
+        "oracle_ms": 22092.39,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q89",
+        "best_ms": 57799.96,
+        "oracle_ms": 46350.59,
+        "regret": 0.24701670464173175,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q92",
+        "best_ms": 28268.32,
+        "oracle_ms": 18769.42,
+        "regret": 0.5060838321056274,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q95",
+        "best_ms": 72903.86,
+        "oracle_ms": 72903.86,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf500",
+        "query": "q98",
+        "best_ms": 64216.76,
+        "oracle_ms": 41401.4,
+        "regret": 0.5510770167192414,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q02",
+        "best_ms": 130054.99,
+        "oracle_ms": 79681.59,
+        "regret": 0.632183670029677,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q05",
+        "best_ms": 189679.71,
+        "oracle_ms": 136139.89,
+        "regret": 0.3932706277344573,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q08",
+        "best_ms": 87293.62,
+        "oracle_ms": 61607.95,
+        "regret": 0.41692135511731854,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q11",
+        "best_ms": 364641.13,
+        "oracle_ms": 364641.13,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q14",
+        "best_ms": 435151.55,
+        "oracle_ms": 363617.96,
+        "regret": 0.19672732887011413,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q17",
+        "best_ms": 128002.82,
+        "oracle_ms": 116363.0,
+        "regret": 0.10003025016543066,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q20",
+        "best_ms": 64571.77,
+        "oracle_ms": 62750.88,
+        "regret": 0.02901776038838011,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q23",
+        "best_ms": 1018756.88,
+        "oracle_ms": 842836.86,
+        "regret": 0.20872369060840557,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q26",
+        "best_ms": 51997.03,
+        "oracle_ms": 45115.91,
+        "regret": 0.15252091778709542,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q29",
+        "best_ms": 174982.05,
+        "oracle_ms": 160453.7,
+        "regret": 0.09054543460200648,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q32",
+        "best_ms": 86043.22,
+        "oracle_ms": 62918.28,
+        "regret": 0.3675392906481232,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q35",
+        "best_ms": 101814.01,
+        "oracle_ms": 101814.01,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q38",
+        "best_ms": 171659.07,
+        "oracle_ms": 118565.35,
+        "regret": 0.4478013180073268,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q41",
+        "best_ms": 3769.77,
+        "oracle_ms": 2815.64,
+        "regret": 0.33886789504340054,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q44",
+        "best_ms": 128685.39,
+        "oracle_ms": 101848.47,
+        "regret": 0.2634985091086788,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q47",
+        "best_ms": 214004.5,
+        "oracle_ms": 117976.76,
+        "regret": 0.8139547144708841,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q50",
+        "best_ms": 332349.48,
+        "oracle_ms": 304142.84,
+        "regret": 0.0927414237336639,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q53",
+        "best_ms": 85237.2,
+        "oracle_ms": 76951.67,
+        "regret": 0.1076718672902095,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q56",
+        "best_ms": 234240.15,
+        "oracle_ms": 222333.53,
+        "regret": 0.05355296612256377,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q59",
+        "best_ms": 146996.57,
+        "oracle_ms": 99734.88,
+        "regret": 0.47387323271457293,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q62",
+        "best_ms": 32303.84,
+        "oracle_ms": 27557.95,
+        "regret": 0.17221491438949554,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q65",
+        "best_ms": 214480.64,
+        "oracle_ms": 194034.95,
+        "regret": 0.10537117153378817,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q68",
+        "best_ms": 94726.65,
+        "oracle_ms": 80371.52,
+        "regret": 0.1786096617309214,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q71",
+        "best_ms": 277180.66,
+        "oracle_ms": 108268.99,
+        "regret": 1.5601112562332018,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q74",
+        "best_ms": 321667.96,
+        "oracle_ms": 245092.68,
+        "regret": 0.3124339739563011,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q77",
+        "best_ms": 330286.09,
+        "oracle_ms": 116207.09,
+        "regret": 1.8422197819427373,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q80",
+        "best_ms": 147374.75,
+        "oracle_ms": 127598.74,
+        "regret": 0.15498593481408984,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q83",
+        "best_ms": 23037.74,
+        "oracle_ms": 23037.74,
+        "regret": 0.0,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q86",
+        "best_ms": 36317.9,
+        "oracle_ms": 34349.07,
+        "regret": 0.057318291295805235,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q89",
+        "best_ms": 89410.81,
+        "oracle_ms": 82828.66,
+        "regret": 0.07946705886585637,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q92",
+        "best_ms": 35327.51,
+        "oracle_ms": 24429.03,
+        "regret": 0.4461282334992427,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q95",
+        "best_ms": 118043.66,
+        "oracle_ms": 97601.18,
+        "regret": 0.20944910707022202,
+        "hit": true,
+        "iters": 4
+      },
+      {
+        "dataset": "sf750",
+        "query": "q98",
+        "best_ms": 88549.2,
+        "oracle_ms": 60309.44,
+        "regret": 0.4682477569017387,
+        "hit": true,
+        "iters": 4
+      }
+    ]
+  }
+}

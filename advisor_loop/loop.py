@@ -11,7 +11,8 @@ DEFAULT_CFG = ConfigVector(executor_cores=8, executor_memory_gb=8, executor_inst
                            aqe_enabled=True, broadcast_threshold_mb=10)
 
 
-def _run_median(deps: Deps, ep: Episode, rec: Recommendation, tries: int):
+def _run_median(deps: Deps, ep: Episode, rec: Recommendation, tries: int,
+                wall_clock_s: float | None = None):
     """Executa a config `tries` vezes e devolve (mediana_ms, duracoes, metricas, err).
     As metricas representativas vem da execucao cuja duracao esta mais proxima da
     mediana -> denoise do ruido run-to-run (que dominava o piloto SF1).
@@ -25,7 +26,8 @@ def _run_median(deps: Deps, ep: Episode, rec: Recommendation, tries: int):
         # unica submissao; o driver ja devolve a mediana dos runs quentes e a
         # lista de duracoes. cold_ms (1a execucao fria) vai no metrics para o
         # journal registrar o custo fixo do harness.
-        out = deps.backend.execute(ep, rec, tries=tries)
+        extra = {"wall_clock_s": wall_clock_s} if wall_clock_s is not None else {}
+        out = deps.backend.execute(ep, rec, tries=tries, **extra)
         qr = next(iter(out.per_query.values()))
         if qr.status == "success" and qr.duration_ms is not None:
             m = dict(qr.metrics or {})
@@ -52,7 +54,9 @@ def _run_median(deps: Deps, ep: Episode, rec: Recommendation, tries: int):
 
 
 def optimize(episode: Episode, deps: Deps, advisor, max_iters: int = 4,
-             patience: int = 2, tries: int = 1) -> dict:
+             patience: int = 2, tries: int = 1,
+             baseline_cfg: ConfigVector | None = None, envelope=None,
+             run_baseline: bool = True) -> dict:
     """Laço fechado de otimização (spec §2.5): propose -> validate -> execute ->
     distill -> re-propose. Para em patience iterações sem melhora ou em max_iters.
 
@@ -71,23 +75,43 @@ def optimize(episode: Episode, deps: Deps, advisor, max_iters: int = 4,
     # optimize -- poluindo o contraste cientifico L0 (r6) vs L1.
     probe = deps.probe_factory(episode) if episode.level in ("L1", "L2") else None
 
-    # iteracao 0: baseline default (k tries -> mediana), sem entrar no historico
-    baseline_ms, _bdurs, baseline_metrics, _berr = _run_median(
-        deps, episode, Recommendation(config=DEFAULT_CFG, rationale="baseline"), tries)
+    # iteracao 0: baseline default (k tries -> mediana), sem entrar no historico.
+    # `baseline_cfg` substitui o default Spark onde ele NAO roda (SF>=750 exige
+    # sp=2000/driver 16g e >= a grade 'large'); fica documentado no opt_result.
+    base_cfg = baseline_cfg or DEFAULT_CFG
+    # v4: proponentes que sabem usar o envelope (random, hibrido, ancoras)
+    # recebem-no antes da primeira proposta.
+    if envelope is not None and hasattr(advisor, "set_envelope"):
+        advisor.set_envelope(envelope)
+    # run_baseline=False: replays da regua top-k nao precisam do default (no
+    # sf500 ele domina o custo); sem baseline -> teto do submitter.
+    if run_baseline:
+        baseline_ms, _bdurs, baseline_metrics, baseline_err = _run_median(
+            deps, episode, Recommendation(config=base_cfg, rationale="baseline"), tries)
+    else:
+        baseline_ms, baseline_metrics, baseline_err = None, {}, None
+    # v4: teto de wall clock POR PROPOSTA relativo a baseline (3x, minimo 20 min):
+    # uma proposta ruim custa minutos, nao as 3h do teto absoluto; "timeout"
+    # continua sendo um dado. Sem baseline (falhou) -> teto do submitter.
+    wall_s = max(3 * baseline_ms / 1000.0, 1200.0) if baseline_ms else None
     # O baseline ja custou k execucoes: aproveita a telemetria dele como PERFIL
     # da query (trabalho de CPU, utilizacao, volume, plano) no contexto de todas
     # as iteracoes -- o peso real da query antes da primeira proposta.
-    profile = (render_profile(DEFAULT_CFG, baseline_ms, baseline_metrics)
+    profile = (render_profile(base_cfg, baseline_ms, baseline_metrics)
                if baseline_ms is not None else "")
 
     for i in range(1, max_iters + 1):
         context = deps.pack.render(episode)
+        if envelope is not None:
+            context = f"{context}\n\n{envelope.render()}"
         if profile:
             context = f"{context}\n\n{profile}"
         mems = deps.memory.retrieve(episode) if hasattr(deps.memory, "retrieve") else []
         rec = advisor.advise(episode, context, probe, mems, history=history)
 
         ok, reason = deps.guardian.validate(rec.config)
+        if ok and envelope is not None:
+            ok, reason = envelope.check(rec.config)
         if not ok:
             # Uma proposta inviavel NAO conta como "sem melhora": e uma rodada
             # desperdicada, nao um sinal de convergencia. Contar no patience
@@ -104,7 +128,7 @@ def optimize(episode: Episode, deps: Deps, advisor, max_iters: int = 4,
                 break
             continue
 
-        dur, durations, metrics, err = _run_median(deps, episode, rec, tries)
+        dur, durations, metrics, err = _run_median(deps, episode, rec, tries, wall_s)
         status = "completed" if dur is not None else "error"
         # Outcome sintetico para memoria/historico: carrega a mediana + metricas
         # representativas (mesma forma que o backend produziria numa unica run).
@@ -146,5 +170,9 @@ def optimize(episode: Episode, deps: Deps, advisor, max_iters: int = 4,
             "best_duration_ms": best_dur,
             "baseline_ms": baseline_ms,
             "baseline_metrics": baseline_metrics,
+            # por que o baseline falhou (timeout/oom/erro); antes era descartado
+            # e o sf500 q23 v4 ficou sem diagnostico.
+            "baseline_error": baseline_err,
+            "baseline_config": base_cfg.model_dump(),
             "iterations": iterations,
             "history_len": len(history)}

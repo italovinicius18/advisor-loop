@@ -15,12 +15,14 @@ class Deps:
     backend: object
     memory: object
     probe_factory: object       # (episode) -> BudgetedProbe | None
+    sizer: object = None        # v4: (episode) -> sizing.Envelope | None
 
 
 def run_campaign(campaign_path: str | Path, deps: Deps) -> dict:
     camp = yaml.safe_load(Path(campaign_path).read_text())
     # knobs: "free" (default, 8 knobs) | "matrix3" (ablacao: so cores/mem/instancias)
-    adv = Advisor(deps.client, deps.journal, knobs=camp.get("knobs", "free"))
+    adv = Advisor(deps.client, deps.journal, knobs=camp.get("knobs", "free"),
+                  pinned=camp.get("pinned"))
     if camp.get("mode") == "optimize":
         return _run_optimize_campaign(camp, deps, adv)
     ran = skipped = 0
@@ -97,12 +99,34 @@ def _run_optimize_campaign(camp: dict, deps: Deps, adv: Advisor) -> dict:
     elif arm == "fixed":                            # replay de configs fixas (oraculo no harness)
         from advisor_loop.studies.advisors import PerQueryFixedAdvisor
         advisor = PerQueryFixedAdvisor(camp.get("configs") or {}, camp.get("config"))
-    elif arm == "hybrid":                           # LLM ancora + pattern search numerico
+    elif arm == "hybrid":                           # anchor + pattern search numerico
         from advisor_loop.advisor.hybrid import HybridAdvisor
-        advisor = HybridAdvisor(adv, deps.guardian, llm_every=camp.get("llm_every", 3))
+        # anchor: "llm" (default, Advisor/LLM) | "heuristic" (A0, sem modelo) |
+        # "jev" (A1, modelo de decisao tipada TypeSafe Jev via OpenRouter).
+        anchor_kind = camp.get("anchor", "llm")
+        if anchor_kind == "heuristic":
+            from advisor_loop.advisor.advisor import PINNED_MATRIX
+            from advisor_loop.advisor.heuristic import HeuristicAnchorAdvisor
+            anchor = HeuristicAnchorAdvisor(deps.guardian,
+                                            dict(PINNED_MATRIX, **(camp.get("pinned") or {})))
+        elif anchor_kind == "jev":
+            from advisor_loop.advisor.advisor import PINNED_MATRIX
+            from advisor_loop.advisor.jev import JevAnchorAdvisor, JevClient
+            anchor = JevAnchorAdvisor(JevClient(), deps.journal, deps.guardian,
+                                      dict(PINNED_MATRIX, **(camp.get("pinned") or {})),
+                                      model=camp.get("jev_model", "typesafe/jev-1.13"))
+        elif anchor_kind == "llm":
+            anchor = adv
+        else:
+            raise ValueError(f"anchor desconhecido: {anchor_kind!r} (use 'llm', 'heuristic' ou 'jev')")
+        advisor = HybridAdvisor(anchor, deps.guardian, llm_every=camp.get("llm_every", 3))
     else:
         raise ValueError(f"arm desconhecido: {arm!r} (use 'llm', 'random', 'hybrid' ou 'fixed')")
     tries = camp.get("tries", 1)
+    from advisor_loop.episode import ConfigVector
+    from advisor_loop.advisor.advisor import PINNED_MATRIX
+    explicit_baseline = ConfigVector(**camp["baseline_config"]) if camp.get("baseline_config") else None
+    pinned = dict(PINNED_MATRIX, **(camp.get("pinned") or {}))
     ran = skipped = 0
     cost = 0.0
     for dataset in camp["datasets"]:
@@ -114,8 +138,28 @@ def _run_optimize_campaign(camp: dict, deps: Deps, adv: Advisor) -> dict:
             if deps.journal.has(ek):        # config-independent: nunca re-executa no resume
                 skipped += 1
                 continue
+            # v4: envelope de escala por (dataset, query) -> baseline dimensionada
+            # (a menos que a campanha fixe baseline_config), pisos no Guardian e
+            # amostragem/ancoras dentro do envelope. Sem sizer -> comportamento v3.
+            # arm fixed (replay do oraculo) NAO passa pelo envelope: a regua mede
+            # a celula da matriz como ela e (o piso >=8g/executor rejeitaria
+            # 2c x 16w x 7g, rank 3 do sf100 q03).
+            # `envelope: false` na campanha reproduz uma campanha v3.1 (sem
+            # envelope) com o codigo atual -- repeticoes do sf750/sf1000 hybrid3.
+            use_env = arm != "fixed" and camp.get("envelope", True)
+            env = (deps.sizer(ep) if getattr(deps, "sizer", None) and use_env else None)
+            baseline_cfg = explicit_baseline
+            if baseline_cfg is None and env is not None:
+                baseline_cfg = env.baseline(pinned, deps.guardian.cluster)
+            if env is not None:
+                deps.journal.append({"kind": "envelope", "dataset": dataset, "query": query,
+                                     "data_gb": env.data_gb, "tables_gb": env.tables_gb,
+                                     "floor_mem_gb": env.floor_mem_gb, "floor_cores": env.floor_cores,
+                                     "baseline": baseline_cfg.model_dump()})
             result = optimize(ep, deps, advisor, max_iters=camp.get("max_iters", 4),
-                              patience=camp.get("patience", 2), tries=tries)
+                              patience=camp.get("patience", 2), tries=tries,
+                              baseline_cfg=baseline_cfg, envelope=env,
+                              run_baseline=camp.get("baseline", True))
             deps.journal.append({"kind": "opt_result", "task_key": ek, "arm": arm,
                                  "query": query, "dataset": dataset,
                                  "provider": ep.provider, "level": ep.level,

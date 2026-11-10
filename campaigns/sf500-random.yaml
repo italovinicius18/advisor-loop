@@ -1,0 +1,13 @@
+# Controle random-8 (schema livre) em sf500. Gerado por scripts/gen_sf_campaigns.py.
+name: sf500-random
+mode: optimize
+backend: spark_k8s
+arm: random
+seed: 1
+level: L0
+provider: random-free-8
+datasets: [sf500]
+queries: [q03, q23, q50]
+tries: 3
+max_iters: 8
+patience: 3

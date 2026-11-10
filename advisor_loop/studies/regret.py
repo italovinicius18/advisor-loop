@@ -33,12 +33,16 @@ class _StudyPack:
     Inofensivo para baselines não-LLM (ignoram o context)."""
     hash = "study"
 
-    def __init__(self, menu: list[tuple[int, int, int]] | None = None):
+    def __init__(self, menu: list[tuple[int, int, int]] | None = None,
+                 benchmark: str = "TPC-H"):
         self.menu = menu
+        # o estudo original (set/2026) rodou so TPC-H; o default preserva aquele
+        # prompt byte a byte. TPC-DS passa benchmark="TPC-DS".
+        self.benchmark = benchmark
 
     def render(self, ep):
         base = (
-            f"Workload: query {ep.queries[0]} do TPC-H no dataset {ep.dataset} "
+            f"Workload: query {ep.queries[0]} do {self.benchmark} no dataset {ep.dataset} "
             f"(o sufixo indica o scale factor em GB). Objetivo: minimizar o tempo "
             f"de execução.")
         if self.menu:

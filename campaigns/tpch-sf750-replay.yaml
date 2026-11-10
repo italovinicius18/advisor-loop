@@ -1,0 +1,22 @@
+# Replay do oraculo em tpch-sf750: celula rank 1 da matriz por query, no harness
+# quente (regua t*_harness deste SF = min dos ranks). Gerado por scripts/gen_sf_campaigns.py.
+name: tpch-sf750-replay
+mode: optimize
+backend: spark_k8s
+arm: fixed
+level: L0
+provider: oracle-replay
+datasets: [tpch-sf750]
+queries: [q01, q09, q18]
+tries: 3
+max_iters: 1
+patience: 1
+baseline: false
+# SF>=750: knobs pinados = os da matriz neste SF (patch v2) e baseline =
+# menor celula 'large' (12c x 2w x 48g); o default Spark nao roda aqui.
+pinned: {driver_memory_gb: 16, shuffle_partitions: 2000, advisory_partition_mb: 64, aqe_enabled: true, broadcast_threshold_mb: 10}
+baseline_config: {executor_cores: 12, executor_memory_gb: 48, executor_instances: 2, driver_memory_gb: 16, shuffle_partitions: 2000, advisory_partition_mb: 64, aqe_enabled: true, broadcast_threshold_mb: 10}
+configs:
+  q01: {executor_cores: 24, executor_memory_gb: 96, executor_instances: 4, driver_memory_gb: 16, shuffle_partitions: 2000, advisory_partition_mb: 64, aqe_enabled: true, broadcast_threshold_mb: 10}   # t*=35.2s
+  q09: {executor_cores: 8, executor_memory_gb: 28, executor_instances: 8, driver_memory_gb: 16, shuffle_partitions: 2000, advisory_partition_mb: 64, aqe_enabled: true, broadcast_threshold_mb: 10}   # t*=776.2s
+  q18: {executor_cores: 8, executor_memory_gb: 28, executor_instances: 8, driver_memory_gb: 16, shuffle_partitions: 2000, advisory_partition_mb: 64, aqe_enabled: true, broadcast_threshold_mb: 10}   # t*=776.0s

@@ -1,0 +1,16 @@
+# Escada de ancoras sob v4.1 -- A0: anchor heuristico deterministico, sem modelo.
+# Repeticao r3 (mesma campanha; variancia entre execucoes, 2026-10-05).
+name: sf100-v4-a0-heuristic-r3
+mode: optimize
+backend: spark_k8s
+arm: hybrid
+llm_every: 3
+knobs: matrix3
+level: L0
+anchor: heuristic
+provider: none-heuristic
+datasets: [sf100]
+queries: [q03, q23, q50]
+tries: 3
+max_iters: 8
+patience: 3
